@@ -2,7 +2,7 @@
 ==================================================
 
 Diese Anleitung beschreibt, wie du die Musikbibliothek auf einem neuen Rechner
-einrichtest und wie Host und Gäste sie benutzen.
+einrichtest und wie Host und Gäste sie benutzen.sdfsf
 
 
 1. Voraussetzungen

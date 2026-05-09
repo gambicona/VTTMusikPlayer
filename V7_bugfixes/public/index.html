@@ -1,0 +1,4826 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Mini-Musikbibliothek Multiplayer</title>
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    body { margin: 0; background: #0f1115; color: #e8eaf0; }
+    header { padding: 16px 20px; border-bottom: 1px solid #23283a; display:flex; gap:14px; align-items:center; flex-wrap: wrap; }
+    header h1 { font-size: 16px; margin: 0; font-weight: 600; letter-spacing: .2px; }
+    .app { display: grid; grid-template-columns: 460px 1fr; gap: 0; height: calc(100vh - 58px); }
+    @media (max-width: 980px) { .app { grid-template-columns: 1fr; height: auto; } }
+
+    .panel { border-right: 1px solid #23283a; padding: 16px; overflow: auto; }
+    @media (max-width: 980px) { .panel { border-right: none; border-bottom: 1px solid #23283a; } }
+
+    .controls { display:flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .controls + .controls { margin-top: 8px; }
+    .importControls { display: grid; gap: 8px; }
+    .importActions { display:flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    input[type="text"] {
+      width: min(560px, 100%);
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid #2b3350;
+      background: #111526;
+      color: #e8eaf0;
+      outline: none;
+    }
+    input[type="text"]::placeholder { color: #9aa2b8; }
+
+    button, select {
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid #2b3350;
+      background: #151b2f;
+      color: #e8eaf0;
+      cursor: pointer;
+    }
+    button:hover, select:hover { background: #1a2140; }
+    button:disabled { opacity: .55; cursor: not-allowed; }
+
+    .hint { color: #9aa2b8; font-size: 13px; margin-top: 10px; line-height: 1.4; }
+    .row { display:flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; align-items:center; }
+    .selectorPair {
+      display: inline-grid;
+      grid-template-columns: 170px 170px;
+      gap: 8px;
+      align-items: center;
+      flex: 0 0 auto;
+    }
+    .selectorPair select,
+    .selectorPair input {
+      width: 100% !important;
+      box-sizing: border-box;
+    }
+    .selectFilter {
+      padding: 10px 12px;
+      font-size: 13px;
+    }
+    @media (max-width: 560px) {
+      .selectorPair {
+        grid-template-columns: 1fr;
+        flex-basis: 100%;
+      }
+    }
+    .hr {
+      width: 80%;
+      margin: 16px auto;
+      height: 1px;
+      background: linear-gradient(to right, transparent, #3a4160, transparent);
+    }
+
+    .list { display:flex; flex-direction: column; gap: 10px; margin-top: 14px; }
+
+    .card {
+      display: grid;
+      grid-template-columns: 84px 1fr 190px;
+      gap: 12px;
+      align-items: start;
+      padding: 10px;
+      border: 1px solid #23283a;
+      border-radius: 14px;
+      background: #0f1426;
+    }
+
+    @media (max-width: 560px) {
+      .card {
+        grid-template-columns: 84px 1fr;
+        grid-template-rows: auto auto;
+      }
+      .btnCol {
+        grid-column: 1 / -1;
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+      .btnCol > * { flex: 1 1 140px; }
+    }
+
+    .thumb { width: 84px; height: 48px; border-radius: 10px; object-fit: cover; background: #0b0e18; border: 1px solid #1d2340; }
+    .meta { flex: 1; min-width: 0; }
+    .title { font-size: 14px; font-weight: 650; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sub { margin: 4px 0 0 0; color: #9aa2b8; font-size: 12px; display:flex; gap: 8px; flex-wrap: wrap; align-items: center; line-height: 1.25; }
+    .tag, .roleTag {
+      padding: 2px 8px;
+      border: 1px solid #2b3350;
+      border-radius: 999px;
+      background: #121a33;
+      white-space: nowrap;
+      font-size: 12px;
+    }
+    .roleTag.host { border-color: #4b6bff; background: #142057; }
+    .roleTag.guest { border-color: #587246; background: #172513; }
+    .roleTag.offline { border-color: #7a4d4d; background: #2b1515; }
+
+    .card .btnCol {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      align-items: stretch;
+    }
+
+    .card .btnCol button {
+      padding: 7px 10px;
+      border-radius: 10px;
+      font-size: 12px;
+    }
+
+    .miniBtnRow {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .miniBtnRow button {
+      padding: 6px 8px;
+      font-size: 12px;
+      flex: 1 1 auto;
+    }
+
+    .miniBtnRow button[title*="oben"],
+    .miniBtnRow button[title*="unten"] {
+      width: 34px;
+      flex: 0 0 34px;
+      padding: 6px 0;
+    }
+
+    .playerPanel {
+  padding: 16px;
+  overflow: auto;
+  display: grid;
+  grid-template-columns: minmax(650px, 980px) minmax(320px, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+@media (max-width: 1300px) {
+  .playerPanel {
+    grid-template-columns: 1fr;
+  }
+}
+    .playerBox {
+      border: 1px solid #23283a; border-radius: 16px; padding: 14px;
+      background: #0f1426;
+      max-width: none;
+    }
+    .playerTop { display:flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .nowTitle { font-weight: 650; }
+    .muted { color: #9aa2b8; }
+
+    #player, #fxPlayer, #localMediaPlayer {
+      width: 420px; height: 236px;
+      border-radius: 14px;
+      overflow: hidden;
+      border: 1px solid #1d2340;
+      background: #000;
+      margin-top: 12px;
+    }
+    #localMediaPlayer, #fxLocalMediaPlayer {
+      display: none;
+      object-fit: contain;
+    }
+    @media (max-width: 520px) { #player, #fxPlayer, #localMediaPlayer { width: 100%; height: 210px; } }
+
+    details { margin-top: 14px; }
+    textarea {
+      width: 100%;
+      min-height: 140px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid #2b3350;
+      background: #111526;
+      color: #e8eaf0;
+      outline: none;
+      resize: vertical;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size: 12px;
+    }
+
+    .status { margin-top: 10px; font-size: 13px; color: #9aa2b8; }
+    .status b { color: #e8eaf0; }
+
+    dialog {
+      border: 1px solid #23283a;
+      border-radius: 16px;
+      padding: 14px;
+      background: #0f1426;
+      color: #e8eaf0;
+      width: min(560px, 92vw);
+    }
+    dialog::backdrop { background: rgba(0,0,0,.55); }
+    .dlgTitle { font-weight: 700; margin: 0 0 10px 0; }
+    .dlgActions { display:flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; margin-top: 12px; }
+    #dlgMgr {
+      width: min(980px, 94vw);
+      max-height: 86vh;
+      overflow: hidden;
+    }
+    #dlgMgr[open] {
+      display: flex;
+      flex-direction: column;
+    }
+    #dlgMgr .dlgActions {
+      position: sticky;
+      bottom: 0;
+      margin: 12px -14px -14px;
+      padding: 10px 14px 14px;
+      background: #0f1426;
+      border-top: 1px solid #23283a;
+      z-index: 2;
+    }
+    .dlgField { display:flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+    .dlgField label { color: #9aa2b8; font-size: 12px; }
+
+    .playerBox .row button { padding: 8px 10px; font-size: 12px; }
+
+    .sideSearch {
+      width: 100%;
+      box-sizing: border-box;
+      margin-top: 12px;
+      margin-bottom: 8px;
+      font-size: 13px;
+    }
+
+    .loopList {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 12px;
+      border: 1px solid #23283a;
+      border-radius: 12px;
+      padding: 8px;
+      background: #0f1426;
+      max-height: none !important;
+      overflow: visible !important;
+    }
+    .loopItem {
+      display: grid;
+      grid-template-columns: 18px 1fr 28px;
+      gap: 10px;
+      align-items: center;
+      padding: 6px 8px;
+      border-radius: 10px;
+      cursor: pointer;
+    }
+    .loopItem:hover { background: #121a33; }
+    .loopTitle {
+      font-size: 12px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .playerGrid {
+      display: grid;
+      grid-template-columns: minmax(420px, 1fr) 360px;
+      gap: 14px;
+      align-items: start;
+      margin-top: 8px;
+    }
+    .playerLeft { min-width: 0; }
+    .playerRight { min-width: 0; }
+    @media (max-width: 980px) { .playerGrid { grid-template-columns: 1fr; } }
+
+    .loopPlayBtn {
+      width: 26px;
+      height: 26px;
+      padding: 0;
+      border-radius: 50%;
+      font-size: 12px;
+      line-height: 1;
+    }
+    .loopPlayBtn.active {
+      border-color: #4b6bff;
+      background: #1a2a66;
+    }
+    .loopItem.active {
+      outline: 1px solid #2b3b8a;
+      background: #101a3a;
+    }
+
+    .mgrGrid {
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      gap: 12px;
+      margin-top: 10px;
+      align-items: start;
+      min-height: 0;
+      overflow: hidden;
+      flex: 1 1 auto;
+    }
+    @media (max-width: 860px) { .mgrGrid { grid-template-columns: 1fr; } }
+
+    .mgrPanel {
+      border: 1px solid #23283a;
+      border-radius: 14px;
+      background: #0f1426;
+      padding: 10px;
+      overflow: auto;
+      min-height: 0;
+      max-height: 100%;
+    }
+
+    .mgrFolder {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 12px;
+      border: 1px solid #23283a;
+      background: #0f1426;
+      margin-top: 8px;
+      user-select: none;
+    }
+    .mgrFolder strong { font-size: 13px; }
+    .mgrFolder .muted { font-size: 12px; }
+    .mgrFolder.dropTarget { outline: 2px dashed #4b6bff; outline-offset: 2px; }
+
+    .mgrFolderActions { display:flex; gap: 6px; }
+    .mgrFolderActions button { padding: 6px 8px; font-size: 12px; border-radius: 10px; }
+
+    .mgrPlaylistItem {
+      border: 1px solid #23283a;
+      border-radius: 14px;
+      background: #0f1426;
+      padding: 10px;
+      margin-top: 10px;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+      cursor: grab;
+    }
+    .mgrPlaylistItem:active { cursor: grabbing; }
+
+    .mgrPlaylistTop {
+      display:flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .mgrPlaylistName { font-weight: 650; font-size: 13px; }
+    .mgrPlaylistMeta { color: #9aa2b8; font-size: 12px; display:flex; gap:8px; flex-wrap: wrap; }
+
+    .chipRow { display:flex; gap: 6px; flex-wrap: wrap; }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 8px;
+      border: 1px solid #2b3350;
+      border-radius: 999px;
+      background: #121a33;
+      font-size: 12px;
+      color: #e8eaf0;
+      white-space: nowrap;
+    }
+    .chip button {
+      padding: 0 6px;
+      height: 18px;
+      line-height: 16px;
+      border-radius: 999px;
+      font-size: 12px;
+    }
+    .chip.chipAdd { border-style: dashed; opacity: 0.95; }
+    .chip.chipAdd button {
+      padding: 0 8px;
+      height: 18px;
+      line-height: 16px;
+      border-radius: 999px;
+      font-weight: 700;
+    }
+
+    .mgrHelp { color:#9aa2b8; font-size: 12px; margin-top: 8px; line-height: 1.35; }
+
+    .fxDivider {
+      border: 0;
+      border-top: 1px solid #23283a;
+      margin: 14px 0;
+    }
+    .fxSection { margin-top: 0; }
+
+    .blockTitle {
+      margin: 0 0 10px 0;
+      font-size: 12px;
+      letter-spacing: .3px;
+      text-transform: uppercase;
+      color: #9aa2b8;
+    }
+	
+	.soundboardBox {
+  border: 1px solid #23283a;
+  border-radius: 16px;
+  padding: 14px;
+  background: #0f1426;
+  min-width: 0;
+  max-height: calc(100vh - 100px);
+  overflow: auto;
+  position: sticky;
+  top: 16px;
+}
+
+.soundboardControls {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 12px;
+}
+
+.soundboardCats {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.sbCat {
+  border: 1px solid #23283a;
+  border-radius: 14px;
+  background: #0f1426;
+  padding: 8px 10px;
+}
+
+.sbCat summary {
+  cursor: pointer;
+  user-select: none;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.sbCatSummary {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.sbCatActions {
+  display: inline-flex;
+  gap: 6px;
+  margin-left: 8px;
+}
+
+.sbCatActions button {
+  padding: 4px 7px;
+  font-size: 11px;
+  border-radius: 8px;
+}
+
+.sbButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.sbSoundWrap {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.sbSoundBtn {
+  padding: 8px 10px;
+  font-size: 12px;
+  border-radius: 10px;
+}
+
+.sbMiniBtn {
+  padding: 6px 7px;
+  font-size: 11px;
+  border-radius: 8px;
+}
+
+.sbHiddenPlayer {
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  margin-top: 8px;
+}
+
+#soundboardPlayer, #soundboardLocalPlayer {
+  width: 200px;
+  height: 113px;
+}
+#soundboardLocalPlayer {
+  display: none;
+  object-fit: contain;
+  background: #000;
+}
+    .unlockPlaybackBtn {
+      border-color: #3fa66b;
+      background: #145c36;
+      color: #f2fff7;
+      font-weight: 650;
+    }
+#youtubeUnlockPlayer {
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+  </style>
+</head>
+<body>
+<header>
+  <h1>Mini-Musikbibliothek Multiplayer</h1>
+  <span class="muted">shared ambience music for your PnP by Arycona</span>
+  <span id="roleBadge" class="roleTag offline">Verbinde…</span>
+  <span id="connStatus" class="muted"></span>
+  <button id="unlockPlaybackBtn" class="unlockPlaybackBtn">Wiedergabe starten</button>
+  <div id="youtubeUnlockPlayer"></div>
+</header>
+
+<div class="app">
+  <div class="panel">
+    <div class="importControls">
+      <span class="muted">YT Import:</span>
+      <input id="ytUrl" type="text" placeholder="YouTube-Link oder Playlist-Link (…watch?v=… / …playlist?list=…)" />
+      <div class="importActions">
+        <button id="addBtn">Video</button>
+        <button id="importPlaylistBtn">Playlist</button>
+        <button id="importChaptersBtn">Kapitel</button>
+      </div>
+      <div class="importActions">
+        <span class="muted">Lokal Import:</span>
+        <input id="localFileInput" type="file" accept=".mp3,.mp4,.wav,audio/mpeg,audio/wav,video/mp4" style="display:none;" />
+        <button id="addLocalBtn">Datei</button>
+        <input id="localFolderInput" type="file" accept=".mp3,.mp4,.wav,audio/mpeg,audio/wav,video/mp4" webkitdirectory multiple style="display:none;" />
+        <button id="importLocalFolderBtn">Ordner</button>
+      </div>
+    </div>
+
+    <div class="row">
+      <label class="muted">Ordner:</label>
+      <span class="selectorPair">
+      <select id="folderSelect"></select>
+      <input id="folderSelectSearch" class="selectFilter" type="text" placeholder="Ordner suchen…" />
+      </span>
+
+      <label class="muted">Playlist:</label>
+      <span class="selectorPair">
+      <select id="playlistSelect"></select>
+      <input id="playlistSelectSearch" class="selectFilter" type="text" placeholder="Playlist suchen…" />
+      </span>
+
+      <button id="managePlaylistsBtn">Playlists verwalten…</button>
+      <button id="newPlaylistBtn">Neue Playlist</button>
+      <button id="renamePlaylistBtn">Liste Umbenennen</button>
+      <button id="deletePlaylistBtn">Liste Löschen</button>
+      <button id="addPlaylistToFolderBtn">Zu Ordner</button>
+    </div>
+
+    <div class="row">
+      <label class="muted">Sortierung:</label>
+      <select id="orderMode">
+        <option value="playlist">Playlist-Reihenfolge</option>
+        <option value="title">Titel (angezeigt)</option>
+        <option value="added">Hinzugefügt</option>
+      </select>
+    </div>
+
+    <p class="hint" id="roleHint">
+      Host: öffne diese Seite mit <b>?host=1</b>. Gäste öffnen dieselbe Adresse ohne Parameter.<br>
+      Gäste können YouTube-Links hinzufügen; sie landen automatisch in <b>OtherImports</b> und werden direkt gestartet.<br>
+      Die Bibliothek wird serverseitig in <b>data/library.json</b> gespeichert.
+    </p>
+
+    <input id="librarySearch" class="sideSearch" type="text" placeholder="Aktuelle Liste durchsuchen…" />
+
+    <div id="list" class="list"></div>
+
+    <details>
+      <summary>Export / Import Backup</summary>
+      <p class="hint">Export kopieren und sichern. Import ist nur im Host-Modus erlaubt und überschreibt den Server-Stand.</p>
+      <div class="row">
+        <button id="exportBtn">Export erzeugen</button>
+        <button id="importBtn">Import übernehmen</button>
+      </div>
+      <textarea id="jsonBox" placeholder="Hier erscheint Export-JSON oder du fügst Import-JSON ein…"></textarea>
+    </details>
+
+    <div class="status" id="status"></div>
+  </div>
+
+  <div class="playerPanel">
+    <div class="playerBox">
+      <div class="playerTop">
+        <span class="nowTitle" id="nowPlaying">Nichts spielt</span>
+        <span class="muted" id="nowSub"></span>
+      </div>
+
+      <div class="row" style="margin-top:12px;">
+        <button id="playBtn" disabled>Play</button>
+        <button id="pauseBtn" disabled>Pause</button>
+        <button id="prevBtn" disabled>◀ Prev</button>
+        <button id="nextBtn" disabled>Next ▶</button>
+        <button id="stopBtn" disabled>Stop</button>
+        <label class="muted">Lautstärke:</label>
+        <input id="mainVol" type="range" min="0" max="100" value="70" />
+        <span class="muted" id="mainVolLabel">70%</span>
+      </div>
+
+      <div class="row" style="margin-top:10px;">
+        <button id="renameCurrentBtn" disabled>Name ändern</button>
+        <button id="deleteCurrentBtn" disabled>Überall löschen</button>
+      </div>
+
+      <div class="playerGrid">
+        <div class="playerLeft">
+          <div id="loopSection" style="margin-top:12px;">
+            <div class="row">
+              <label class="muted">Loop:</label>
+              <select id="loopMode">
+                <option value="off">Aus</option>
+                <option value="track">Dieser Track</option>
+                <option value="list">Aktuelle Playlist</option>
+                <option value="selection">Auswahl</option>
+              </select>
+              <label class="muted" style="margin-left:10px; display:flex; align-items:center; gap:6px;">
+                <input id="shuffleMode" type="checkbox">
+                Shuffle
+              </label>
+              <button id="loopAllBtn" disabled>Alle</button>
+              <button id="loopNoneBtn" disabled>Keine</button>
+            </div>
+            <div class="hint" id="loopHint">Starte einen Track aus einer Playlist, dann kannst du hier auswählen, was geloopt wird.</div>
+          </div>
+
+          <div id="player"></div>
+          <video id="localMediaPlayer" controls playsinline></video>
+
+          <div class="row" style="margin-top:10px;">
+            <button id="setStartBtn" disabled>Anfang festlegen</button>
+            <button id="setEndBtn" disabled>Ende festlegen</button>
+            <button id="setTagsBtn" disabled>Tags setzen</button>
+          </div>
+
+          <hr class="fxDivider">
+
+          <div class="fxSection">
+            <div class="playerTop" style="margin-top:0;">
+              <span class="nowTitle">FX Player</span>
+              <span class="muted" id="fxNow">Aus</span>
+            </div>
+
+            <div class="row">
+              <label class="muted">Ordner:</label>
+              <select id="fxFolderSelect"></select>
+
+              <label class="muted">Playlist:</label>
+              <select id="fxPlaylistSelect"></select>
+            </div>
+			<input id="fxTrackSearch" class="sideSearch" type="text" placeholder="FX-Playlist durchsuchen…" />
+            <div class="row">
+              <label class="muted">Track:</label>
+              <select id="fxTrackSelect" style="min-width:260px;"></select>
+
+              <button id="fxPlayBtn" disabled>FX Start</button>
+              <button id="fxStopBtn" disabled>FX Stop</button>
+            </div>
+
+            <div class="row">
+              <label class="muted">Lautstärke:</label>
+              <input id="fxVol" type="range" min="0" max="100" value="35" />
+              <span class="muted" id="fxVolLabel">35%</span>
+              <span class="muted">Loop: Dieser Track</span>
+            </div>
+
+            <div id="fxPlayer"></div>
+            <video id="fxLocalMediaPlayer" playsinline></video>
+          </div>
+        </div>
+
+        <div class="playerRight">
+          <input id="loopSearch" class="sideSearch" type="text" placeholder="Diese Playlist durchsuchen…" />
+          <div class="row" style="margin-top:0;">
+            <button id="setPlaylistTagsBtn" disabled>Playlist-Tag setzen</button>
+          </div>
+          <div id="loopList" class="loopList"></div>
+        </div>
+      </div>
+
+            <p class="hint">
+        Falls ein Video nicht abspielt: Manche YouTube-Videos erlauben keine Wiedergabe auf anderen Websites. Jeder Teilnehmer sollte nach dem Öffnen einmal auf die Seite klicken, damit der Browser Wiedergabe erlaubt.
+      </p>
+    </div>
+
+    <aside class="soundboardBox">
+      <div class="playerTop">
+        <span class="nowTitle">Soundboard</span>
+        <span class="muted" id="sbNow">Aus</span>
+      </div>
+
+      <div class="soundboardControls">
+        <label class="muted">Lautstärke:</label>
+        <input id="sbVol" type="range" min="0" max="100" value="45" />
+        <span class="muted" id="sbVolLabel">45%</span>
+      </div>
+
+      <div class="soundboardControls">
+  <button id="sbEndSoundBtn">End Sound</button>
+  <button id="sbConfigureBtn">Configure Soundboard</button>
+  <button id="sbAddCategoryBtn" style="display:none;">Neue Kategorie</button>
+</div>
+
+      <div id="sbCategories" class="soundboardCats"></div>
+
+      <div class="sbHiddenPlayer">
+        <div id="soundboardPlayer"></div>
+        <video id="soundboardLocalPlayer" playsinline></video>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<dialog id="dlgText">
+  <p class="dlgTitle" id="dlgTextTitle">Titel</p>
+  <div class="dlgField">
+    <label id="dlgTextLabel" for="dlgTextInput">Eingabe</label>
+    <input id="dlgTextInput" type="text" />
+  </div>
+  <div class="dlgActions">
+    <button id="dlgTextCancel">Abbrechen</button>
+    <button id="dlgTextOk">OK</button>
+  </div>
+</dialog>
+
+<dialog id="dlgSelect">
+  <p class="dlgTitle" id="dlgSelectTitle">Auswahl</p>
+  <div class="dlgField">
+    <label id="dlgSelectLabel" for="dlgSelectInput">Bitte wählen</label>
+    <select id="dlgSelectInput"></select>
+  </div>
+  <div class="dlgActions">
+    <button id="dlgSelectCancel">Abbrechen</button>
+    <button id="dlgSelectOk">OK</button>
+  </div>
+</dialog>
+
+<dialog id="dlgMgr">
+  <p class="dlgTitle">Playlists & Ordner</p>
+  <div class="mgrHelp">
+    - Ziehe eine Playlist auf einen Ordner, um sie dem Ordner <b>zusätzlich</b> zuzuordnen.<br>
+    - Entfernen: ✕ an einem Ordner-Chip in der Playlist.<br>
+    - Ordner löschen entfernt nur die Zuordnung, nicht die Playlists.<br>
+    - Nur der Host kann hier Änderungen speichern.
+  </div>
+
+  <div class="mgrGrid">
+    <div class="mgrPanel">
+      <div class="row" style="margin-top:0;">
+        <button id="mgrNewFolderBtn">Neuer Ordner</button>
+      </div>
+      <input id="mgrFolderSearch" class="sideSearch" type="text" placeholder="Ordner durchsuchen…" />
+      <div id="mgrFolders"></div>
+    </div>
+
+    <div class="mgrPanel">
+      <div class="row" style="margin-top:0;">
+        <span class="muted">Playlists</span>
+      </div>
+      <input id="mgrPlaylistSearch" class="sideSearch" type="text" placeholder="Playlists durchsuchen…" />
+      <div id="mgrPlaylists"></div>
+    </div>
+  </div>
+
+  <div class="dlgActions">
+    <button id="mgrCloseBtn">Schließen</button>
+  </div>
+</dialog>
+
+<script>
+(() => {
+  const STORAGE_KEY = "yt_mini_library_multiplayer_cache_v1";
+  const LOCAL_UI_KEY = "yt_mini_library_local_ui_v1";
+  const ALL_VIEW_ID = "__ALL__";
+  const DEFAULT_PLAYLIST_ID = "__UNSORTIERT__";
+  const OTHER_IMPORTS_ID = "__OTHER_IMPORTS__";
+
+  const PLAYLIST_POLL_TRIES = 40;
+  const PLAYLIST_POLL_DELAY_MS = 250;
+  const OEMBED_MAX_PER_IMPORT = 250;
+  const OEMBED_BATCH_RENDER_EVERY = 12;
+  const OEMBED_CONCURRENCY = 8;
+
+  const params = new URLSearchParams(window.location.search);
+  const IS_HOST = params.get("host") === "1";
+  const socket = typeof io === "function" ? io({ auth: { role: IS_HOST ? "host" : "guest" } }) : null;
+
+  const el = {
+    ytUrl: document.getElementById("ytUrl"),
+    addBtn: document.getElementById("addBtn"),
+    localFileInput: document.getElementById("localFileInput"),
+    addLocalBtn: document.getElementById("addLocalBtn"),
+    localFolderInput: document.getElementById("localFolderInput"),
+    importLocalFolderBtn: document.getElementById("importLocalFolderBtn"),
+    importPlaylistBtn: document.getElementById("importPlaylistBtn"),
+    importChaptersBtn: document.getElementById("importChaptersBtn"),
+
+    folderSelect: document.getElementById("folderSelect"),
+    folderSelectSearch: document.getElementById("folderSelectSearch"),
+    playlistSelect: document.getElementById("playlistSelect"),
+    playlistSelectSearch: document.getElementById("playlistSelectSearch"),
+    managePlaylistsBtn: document.getElementById("managePlaylistsBtn"),
+    newPlaylistBtn: document.getElementById("newPlaylistBtn"),
+    renamePlaylistBtn: document.getElementById("renamePlaylistBtn"),
+    deletePlaylistBtn: document.getElementById("deletePlaylistBtn"),
+    addPlaylistToFolderBtn: document.getElementById("addPlaylistToFolderBtn"),
+
+    list: document.getElementById("list"),
+    librarySearch: document.getElementById("librarySearch"),
+    status: document.getElementById("status"),
+    orderMode: document.getElementById("orderMode"),
+    roleBadge: document.getElementById("roleBadge"),
+    connStatus: document.getElementById("connStatus"),
+    unlockPlaybackBtn: document.getElementById("unlockPlaybackBtn"),
+    roleHint: document.getElementById("roleHint"),
+
+    nowPlaying: document.getElementById("nowPlaying"),
+    localMediaPlayer: document.getElementById("localMediaPlayer"),
+    nowSub: document.getElementById("nowSub"),
+
+    playBtn: document.getElementById("playBtn"),
+    pauseBtn: document.getElementById("pauseBtn"),
+    prevBtn: document.getElementById("prevBtn"),
+    nextBtn: document.getElementById("nextBtn"),
+    stopBtn: document.getElementById("stopBtn"),
+    mainVol: document.getElementById("mainVol"),
+    mainVolLabel: document.getElementById("mainVolLabel"),
+    setStartBtn: document.getElementById("setStartBtn"),
+    setEndBtn: document.getElementById("setEndBtn"),
+    setTagsBtn: document.getElementById("setTagsBtn"),
+
+    renameCurrentBtn: document.getElementById("renameCurrentBtn"),
+    deleteCurrentBtn: document.getElementById("deleteCurrentBtn"),
+
+    loopMode: document.getElementById("loopMode"),
+    loopAllBtn: document.getElementById("loopAllBtn"),
+    loopNoneBtn: document.getElementById("loopNoneBtn"),
+    loopList: document.getElementById("loopList"),
+    loopHint: document.getElementById("loopHint"),
+    loopSearch: document.getElementById("loopSearch"),
+    setPlaylistTagsBtn: document.getElementById("setPlaylistTagsBtn"),
+    shuffleMode: document.getElementById("shuffleMode"),
+
+    exportBtn: document.getElementById("exportBtn"),
+    importBtn: document.getElementById("importBtn"),
+    jsonBox: document.getElementById("jsonBox"),
+
+    dlgText: document.getElementById("dlgText"),
+    dlgTextTitle: document.getElementById("dlgTextTitle"),
+    dlgTextLabel: document.getElementById("dlgTextLabel"),
+    dlgTextInput: document.getElementById("dlgTextInput"),
+    dlgTextOk: document.getElementById("dlgTextOk"),
+    dlgTextCancel: document.getElementById("dlgTextCancel"),
+
+    dlgSelect: document.getElementById("dlgSelect"),
+    dlgSelectTitle: document.getElementById("dlgSelectTitle"),
+    dlgSelectLabel: document.getElementById("dlgSelectLabel"),
+    dlgSelectInput: document.getElementById("dlgSelectInput"),
+    dlgSelectOk: document.getElementById("dlgSelectOk"),
+    dlgSelectCancel: document.getElementById("dlgSelectCancel"),
+
+    dlgMgr: document.getElementById("dlgMgr"),
+    mgrCloseBtn: document.getElementById("mgrCloseBtn"),
+    mgrNewFolderBtn: document.getElementById("mgrNewFolderBtn"),
+    mgrFolderSearch: document.getElementById("mgrFolderSearch"),
+    mgrPlaylistSearch: document.getElementById("mgrPlaylistSearch"),
+    mgrFolders: document.getElementById("mgrFolders"),
+    mgrPlaylists: document.getElementById("mgrPlaylists"),
+
+    fxNow: document.getElementById("fxNow"),
+    fxFolderSelect: document.getElementById("fxFolderSelect"),
+    fxPlaylistSelect: document.getElementById("fxPlaylistSelect"),
+	fxTrackSearch: document.getElementById("fxTrackSearch"),
+	fxTrackSelect: document.getElementById("fxTrackSelect"),
+	fxPlayBtn: document.getElementById("fxPlayBtn"),
+    fxStopBtn: document.getElementById("fxStopBtn"),
+    fxVol: document.getElementById("fxVol"),
+fxVolLabel: document.getElementById("fxVolLabel"),
+fxLocalMediaPlayer: document.getElementById("fxLocalMediaPlayer"),
+
+sbNow: document.getElementById("sbNow"),
+sbVol: document.getElementById("sbVol"),
+sbVolLabel: document.getElementById("sbVolLabel"),
+sbEndSoundBtn: document.getElementById("sbEndSoundBtn"),
+sbConfigureBtn: document.getElementById("sbConfigureBtn"),
+sbAddCategoryBtn: document.getElementById("sbAddCategoryBtn"),
+sbCategories: document.getElementById("sbCategories"),
+soundboardLocalPlayer: document.getElementById("soundboardLocalPlayer"),
+  };
+
+  let state = normalizeState(loadCachedState());
+
+  let player = null;
+  let playerReady = false;
+  let activeMainPlayer = "youtube";
+  let fxPlayer = null;
+  let fxReady = false;
+  let activeFxPlayer = "youtube";
+
+  let viewQueue = [];
+  let currentQueue = [];
+  let currentIndex = -1;
+  let currentVid = null;
+  let loopSelected = new Set();
+  let loopContextKey = null;
+
+  let fxPlaylistId = null;
+  let fxQueue = [];
+  let fxVid = null;
+  let fxPlaying = false;
+  let soundboardPlayer = null;
+let soundboardReady = false;
+let soundboardConfigMode = false;
+let activeSoundboardPlayer = "youtube";
+let soundboardEndTimer = null;
+let youtubeUnlockPlayer = null;
+let playbackUnlocked = false;
+
+  let dlgResolve = null;
+  let applyingRemoteState = false;
+  let applyingRemoteCommand = false;
+  let savePushTimer = null;
+  let importingPlaylist = false;
+  let segmentEndTimer = null;
+
+  // -----------------------------
+  // Utilities
+  // -----------------------------
+  function setStatus(msg) { el.status.innerHTML = msg || ""; }
+
+  function nowIsoShort() {
+    const d = new Date();
+    const p = n => String(n).padStart(2,"0");
+    return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  }
+
+  function makeId(prefix="pl") {
+    if (crypto?.randomUUID) return `${prefix}_${crypto.randomUUID()}`;
+    return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+  }
+
+  function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+  function makeHiddenImportPlayerNode() {
+    const wrap = document.createElement("div");
+    wrap.style.position = "fixed";
+    wrap.style.left = "-10000px";
+    wrap.style.top = "0";
+    wrap.style.width = "1px";
+    wrap.style.height = "1px";
+    wrap.style.overflow = "hidden";
+
+    const node = document.createElement("div");
+    node.id = `ytImportReader_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    wrap.appendChild(node);
+    document.body.appendChild(wrap);
+
+    return { wrap, node };
+  }
+
+  async function readYoutubePlaylistIds(playlistId) {
+    if (typeof YT === "undefined" || typeof YT.Player !== "function") {
+      throw new Error("YouTube Player API ist noch nicht bereit.");
+    }
+
+    const { wrap, node } = makeHiddenImportPlayerNode();
+    let importPlayer = null;
+
+    try {
+      await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error("YouTube Import-Player wurde nicht bereit.")), 10000);
+
+        importPlayer = new YT.Player(node.id, {
+          height: "1",
+          width: "1",
+          playerVars: {
+            controls: 0,
+            modestbranding: 1,
+            rel: 0,
+            playsinline: 1,
+            origin: window.location.origin
+          },
+          events: {
+            onReady: () => {
+              clearTimeout(timeout);
+              resolve();
+            },
+            onError: () => {
+              clearTimeout(timeout);
+              reject(new Error("YouTube Import-Player konnte nicht laden."));
+            }
+          }
+        });
+      });
+
+      try {
+        importPlayer.cuePlaylist({ listType: "playlist", list: playlistId, index: 0 });
+      } catch {
+        importPlayer.cuePlaylist(playlistId, 0, 0);
+      }
+
+      for (let i = 0; i < PLAYLIST_POLL_TRIES; i++) {
+        await sleep(PLAYLIST_POLL_DELAY_MS);
+        try {
+          const ids = importPlayer.getPlaylist();
+          if (Array.isArray(ids) && ids.length > 0) return ids;
+        } catch {}
+      }
+
+      return [];
+    } finally {
+      try { importPlayer?.destroy?.(); } catch {}
+      wrap.remove();
+    }
+  }
+
+  function formatDuration(sec) {
+    if (!Number.isFinite(sec) || sec <= 0) return "—";
+    sec = Math.floor(sec);
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    const s = sec % 60;
+    if (h > 0) return `${h}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
+    return `${m}:${String(s).padStart(2,"0")}`;
+  }
+
+  function formatTimestampInput(sec) {
+    if (!Number.isFinite(sec) || sec < 0) sec = 0;
+    sec = Math.floor(sec);
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    const s = sec % 60;
+    if (h > 0) return `${h}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
+    return `${m}:${String(s).padStart(2,"0")}`;
+  }
+
+  function parseTimestampInput(raw) {
+    const text = String(raw || "").trim();
+    if (!text) return null;
+    if (/^\d+$/.test(text)) return Number(text);
+    const parts = text.split(":").map(part => part.trim());
+    if (parts.length < 2 || parts.length > 3) return null;
+    const nums = parts.map(Number);
+    if (nums.some(n => !Number.isFinite(n) || n < 0)) return null;
+    if (nums.length === 2) return nums[0] * 60 + nums[1];
+    return nums[0] * 3600 + nums[1] * 60 + nums[2];
+  }
+
+  function displayTitle(t) {
+    return (t?.customTitle && t.customTitle.trim()) ? t.customTitle.trim()
+         : (t?.originalTitle && t.originalTitle.trim()) ? t.originalTitle.trim()
+         : "(ohne Titel)";
+  }
+
+  function normalizeTags(value) {
+    const arr = Array.isArray(value) ? value : String(value || "").split(",");
+    return [...new Set(arr
+      .map(tag => String(tag || "").trim())
+      .filter(Boolean)
+    )];
+  }
+
+  function tagsText(t) {
+    return normalizeTags(t?.tags).join(", ");
+  }
+
+  function escapeHtml(s) {
+    return String(s)
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
+
+  function extractVideoId(url) {
+    if (!url) return null;
+    url = url.trim();
+    try {
+      const u = new URL(url);
+      if (u.hostname.includes("youtu.be")) {
+        const id = u.pathname.replace("/", "").trim();
+        return id || null;
+      }
+      const v = u.searchParams.get("v");
+      if (v) return v.trim();
+      const shortsMatch = u.pathname.match(/\/shorts\/([a-zA-Z0-9_-]{6,})/);
+      if (shortsMatch) return shortsMatch[1];
+      const embedMatch = u.pathname.match(/\/embed\/([a-zA-Z0-9_-]{6,})/);
+      if (embedMatch) return embedMatch[1];
+      return null;
+    } catch {
+      const m = url.match(/(?:v=|youtu\.be\/|shorts\/|embed\/)([a-zA-Z0-9_-]{6,})/);
+      return m ? m[1] : null;
+    }
+  }
+
+  function extractPlaylistId(url) {
+    if (!url) return null;
+    url = url.trim();
+    try {
+      const u = new URL(url);
+      const list = u.searchParams.get("list");
+      return list ? list.trim() : null;
+    } catch {
+      const m = url.match(/[?&]list=([a-zA-Z0-9_-]+)/);
+      return m ? m[1] : null;
+    }
+  }
+
+  function makeThumbUrl(videoId) {
+    return `https://i.ytimg.com/vi/${encodeURIComponent(videoId)}/hqdefault.jpg`;
+  }
+
+  function isLocalTrack(t) {
+    return !!t && (t.source === "local" || t.source === "localCut");
+  }
+
+  function trackIdFor(track) {
+    return track?.videoId || track?.id;
+  }
+
+  function localThumbDataUrl(t) {
+    const label = (t?.mediaType || "").startsWith("video/") ? "MP4" : "AUDIO";
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180"><rect width="320" height="180" fill="#101728"/><text x="160" y="88" text-anchor="middle" fill="#e8ecff" font-size="28" font-family="Arial">${label}</text><text x="160" y="120" text-anchor="middle" fill="#9aa2b8" font-size="16" font-family="Arial">Lokale Datei</text></svg>`;
+    return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+  }
+
+  function trackThumbUrl(trackId) {
+    const t = state.tracks[trackId];
+    if (isLocalTrack(t)) return t.thumbnailUrl || localThumbDataUrl(t);
+    return t?.thumbnailUrl || makeThumbUrl(trackVideoId(trackId));
+  }
+
+  function trackMediaUrl(trackId) {
+    const t = state.tracks[trackId];
+    return isLocalTrack(t) ? t.mediaUrl : null;
+  }
+
+  function firstYouTubeUnlockVideoId() {
+    for (const pl of state.playlists || []) {
+      for (const id of pl.trackIds || []) {
+        const t = state.tracks[id];
+        if (t && !isLocalTrack(t)) return trackVideoId(id);
+      }
+    }
+
+    for (const id of Object.keys(state.tracks || {})) {
+      const t = state.tracks[id];
+      if (t && !isLocalTrack(t)) return trackVideoId(id);
+    }
+
+    for (const cat of state.soundboard?.categories || []) {
+      for (const item of cat.items || []) {
+        const videoId = item.videoId || extractVideoId(item.url || "");
+        if (videoId) return videoId;
+      }
+    }
+
+    return null;
+  }
+
+  function trackVideoId(trackId) {
+    return state.tracks[trackId]?.videoId || trackId;
+  }
+
+  function trackStartSec(trackId) {
+    const n = Number(state.tracks[trackId]?.startSec);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  }
+
+  function trackEndSec(trackId) {
+    const n = Number(state.tracks[trackId]?.endSec);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }
+
+  function trackUrlAtStart(trackId) {
+    const t = state.tracks[trackId];
+    if (isLocalTrack(t)) return t.mediaUrl || "";
+    const videoId = trackVideoId(trackId);
+    const start = trackStartSec(trackId);
+    return `https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}${start > 0 ? `&t=${Math.floor(start)}s` : ""}`;
+  }
+
+  function playbackPlaylistId() {
+    if (loopContextKey?.startsWith("playlist:")) return loopContextKey.slice("playlist:".length);
+    if (!isAllViewSelected()) return state.ui.selectedPlaylistId;
+    return null;
+  }
+
+  function isSegmentTrack(t) {
+    return !!t && (t.source === "youtubeChapter" || t.source === "youtubeCut" || t.source === "localCut" || Number.isFinite(Number(t.startSec)) || Number.isFinite(Number(t.endSec)));
+  }
+
+  async function fetchOEmbed(anyYoutubeUrl) {
+    const endpoint = new URL("/api/oembed", window.location.origin);
+    endpoint.searchParams.set("url", anyYoutubeUrl);
+    const res = await fetch(endpoint.toString(), { method: "GET" });
+    if (!res.ok) throw new Error("oEmbed nicht verfügbar");
+    return await res.json();
+  }
+
+  async function loadMetadataForTrack(vid) {
+    const t = state.tracks[vid];
+    if (!t) return false;
+    if (isLocalTrack(t)) return false;
+
+    const needsTitle = !t.originalTitle || t.originalTitle.startsWith("(Titel");
+    const needsThumb = !t.thumbnailUrl;
+    if (!needsTitle && !needsThumb) return false;
+
+    try {
+      const o = await fetchOEmbed(t.url || `https://www.youtube.com/watch?v=${encodeURIComponent(vid)}`);
+      if (o?.title) t.originalTitle = o.title;
+      else if (needsTitle) t.originalTitle = "(Titel nicht verfÃ¼gbar)";
+      if (o?.thumbnail_url) t.thumbnailUrl = o.thumbnail_url;
+      else if (!t.thumbnailUrl) t.thumbnailUrl = makeThumbUrl(vid);
+    } catch {
+      if (needsTitle) t.originalTitle = "(Titel nicht verfÃ¼gbar)";
+      if (!t.thumbnailUrl) t.thumbnailUrl = makeThumbUrl(vid);
+    }
+
+    t.updatedAt = Date.now();
+    return true;
+  }
+
+  function getCurrentPositionSec() {
+    try {
+      if (activeMainPlayer === "local" && el.localMediaPlayer && currentVid) {
+        return Math.floor(el.localMediaPlayer.currentTime || 0);
+      }
+      if (player && currentVid) return Math.floor(player.getCurrentTime?.() || 0);
+    } catch {}
+    return 0;
+  }
+
+  async function fetchYouTubeChapters(url) {
+    const endpoint = new URL("/api/youtube-chapters", window.location.origin);
+    endpoint.searchParams.set("url", url);
+    const res = await fetch(endpoint.toString(), { method: "GET" });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(data?.error || "Kapitel konnten nicht gelesen werden.");
+    return data;
+  }
+
+  // -----------------------------
+  // State
+  // -----------------------------
+  function freshState() {
+    return {
+      tracks: {},
+      playlists: [],
+      folders: [],
+      ui: {
+        selectedPlaylistId: ALL_VIEW_ID,
+        selectedFolderId: "__ALL__",
+        loopSelections: {},
+        shuffleEnabled: false,
+        mainVolume: 70
+      }
+    };
+  }
+
+  function normalizeState(s) {
+    if (!s || typeof s !== "object") s = freshState();
+    s.tracks = s.tracks && typeof s.tracks === "object" ? s.tracks : {};
+    s.playlists = Array.isArray(s.playlists) ? s.playlists : [];
+    s.folders = Array.isArray(s.folders) ? s.folders : [];
+    s.ui = s.ui && typeof s.ui === "object" ? s.ui : {};
+
+    if (!s.ui.selectedPlaylistId) s.ui.selectedPlaylistId = ALL_VIEW_ID;
+    if (!s.ui.selectedFolderId) s.ui.selectedFolderId = "__ALL__";
+    if (!s.ui.loopSelections) s.ui.loopSelections = {};
+    if (typeof s.ui.shuffleEnabled !== "boolean") s.ui.shuffleEnabled = false;
+    if (!Number.isFinite(Number(s.ui.mainVolume))) s.ui.mainVolume = 70;
+    s.ui.mainVolume = Math.max(0, Math.min(100, Number(s.ui.mainVolume)));
+
+    ensureDefaultPlaylist(s);
+ensureOtherImportsPlaylist(s);
+normalizePlaylistsForFolders(s);
+ensureSoundboardState(s);
+return s;
+  }
+
+  function loadCachedState() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      return raw ? JSON.parse(raw) : freshState();
+    } catch {
+      return freshState();
+    }
+  }
+
+  function cacheState() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch (err) {
+      console.warn("Local cache failed:", err);
+    }
+  }
+
+  function loadLocalUiState() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(LOCAL_UI_KEY) || "{}");
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+
+  function saveLocalUiState(patch) {
+    try {
+      const next = { ...loadLocalUiState(), ...patch };
+      localStorage.setItem(LOCAL_UI_KEY, JSON.stringify(next));
+    } catch (err) {
+      console.warn("Local UI cache failed:", err);
+    }
+  }
+
+  function numberOrFallback(value, fallback) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : fallback;
+  }
+
+  function pushStateToServer(snapshot) {
+    return new Promise((resolve) => {
+      socket.emit("library:replace", snapshot, (res) => {
+        if (!res?.ok) setStatus(`Server-Speichern fehlgeschlagen: ${escapeHtml(res?.error || "Unbekannter Fehler")}`);
+        resolve(res);
+      });
+    });
+  }
+
+  function saveState({ immediate = false } = {}) {
+    state = normalizeState(state);
+    cacheState();
+
+    if (IS_HOST && !applyingRemoteState && socket?.connected) {
+      clearTimeout(savePushTimer);
+      const snapshot = JSON.parse(JSON.stringify(state));
+      if (immediate) return pushStateToServer(snapshot);
+      savePushTimer = setTimeout(() => pushStateToServer(snapshot), 200);
+    }
+
+    return Promise.resolve({ ok: true });
+  }
+
+  function ensureDefaultPlaylist(s) {
+    if (!Array.isArray(s.playlists)) s.playlists = [];
+    const exists = s.playlists.some(p => p.id === DEFAULT_PLAYLIST_ID);
+    if (!exists) {
+      s.playlists.unshift({
+        id: DEFAULT_PLAYLIST_ID,
+        name: "Unsortiert",
+        trackIds: [],
+        folderIds: []
+      });
+    }
+  }
+
+  function ensureOtherImportsPlaylist(s) {
+    if (!Array.isArray(s.playlists)) s.playlists = [];
+    let pl = s.playlists.find(p => p.id === OTHER_IMPORTS_ID);
+    if (!pl) {
+      pl = {
+        id: OTHER_IMPORTS_ID,
+        name: "OtherImports",
+        trackIds: [],
+        folderIds: [],
+        source: { type: "guestImports" }
+      };
+      s.playlists.push(pl);
+    }
+    if (!Array.isArray(pl.trackIds)) pl.trackIds = [];
+    if (!Array.isArray(pl.folderIds)) pl.folderIds = [];
+    return pl;
+  }
+  
+  function ensureSoundboardState(s) {
+  if (!s.soundboard || typeof s.soundboard !== "object") {
+    s.soundboard = {
+      volume: 45,
+      categories: [
+        { id: makeId("sbcat"), name: "Animals", open: true, items: [] },
+        { id: makeId("sbcat"), name: "Weapons", open: true, items: [] }
+      ]
+    };
+  }
+
+  if (!Number.isFinite(Number(s.soundboard.volume))) {
+    s.soundboard.volume = 45;
+  }
+
+  if (!Array.isArray(s.soundboard.categories)) {
+    s.soundboard.categories = [];
+  }
+
+  for (const cat of s.soundboard.categories) {
+    if (!cat.id) cat.id = makeId("sbcat");
+    if (!cat.name) cat.name = "Kategorie";
+    if (typeof cat.open !== "boolean") cat.open = true;
+    if (!Array.isArray(cat.items)) cat.items = [];
+
+    for (const item of cat.items) {
+      if (!item.id) item.id = makeId("sbi");
+      if (!item.label) item.label = "Sound";
+      if (!item.videoId && item.url) item.videoId = extractVideoId(item.url);
+    }
+  }
+}
+
+  function normalizePlaylistsForFolders(s) {
+    for (const pl of s.playlists) {
+      if (!Array.isArray(pl.trackIds)) pl.trackIds = [];
+      if (!Array.isArray(pl.folderIds)) pl.folderIds = [];
+    }
+  }
+
+  // -----------------------------
+  // Data helpers
+  // -----------------------------
+  function getPlaylistById(id) {
+    return state.playlists.find(p => p.id === id) || null;
+  }
+
+  function getFolderById(id) {
+    return state.folders.find(f => f.id === id) || null;
+  }
+
+  function isAllViewSelected() {
+    return state.ui.selectedPlaylistId === ALL_VIEW_ID;
+  }
+
+  function selectedPlaylistIdForAdding() {
+    return isAllViewSelected() ? DEFAULT_PLAYLIST_ID : state.ui.selectedPlaylistId;
+  }
+
+  function selectedPlaylistNameForAdding() {
+    return getPlaylistById(selectedPlaylistIdForAdding())?.name || "Unsortiert";
+  }
+
+  function upsertTrack(track) {
+    const existing = state.tracks[track.videoId];
+    if (existing) {
+      state.tracks[track.videoId] = {
+        ...existing,
+        ...track,
+        customTitle: existing.customTitle ?? track.customTitle ?? "",
+        addedAt: existing.addedAt || Date.now(),
+        updatedAt: Date.now()
+      };
+    } else {
+      state.tracks[track.videoId] = {
+        ...track,
+        source: track.source || "youtube",
+        addedAt: Date.now(),
+        updatedAt: Date.now()
+      };
+    }
+    saveState();
+  }
+
+  function ensureTrackInPlaylist(videoId, playlistId, position = "end") {
+    const pl = getPlaylistById(playlistId);
+    if (!pl) return false;
+    if (!Array.isArray(pl.trackIds)) pl.trackIds = [];
+    if (pl.trackIds.includes(videoId)) return false;
+    if (position === "start") pl.trackIds.unshift(videoId);
+    else pl.trackIds.push(videoId);
+    saveState();
+    return true;
+  }
+
+  function removeTrackFromPlaylist(videoId, playlistId) {
+    const pl = getPlaylistById(playlistId);
+    if (!pl) return false;
+    const before = pl.trackIds.length;
+    pl.trackIds = pl.trackIds.filter(id => id !== videoId);
+    const changed = pl.trackIds.length !== before;
+    if (changed) saveState();
+    return changed;
+  }
+
+  function deleteTrackEverywhere(videoId) {
+    for (const pl of state.playlists) {
+      if (Array.isArray(pl.trackIds)) pl.trackIds = pl.trackIds.filter(id => id !== videoId);
+    }
+    delete state.tracks[videoId];
+    saveState();
+  }
+
+  async function setCurrentCutPoint(kind) {
+    if (!IS_HOST || !currentVid) return;
+
+    const defaultSec = getCurrentPositionSec();
+    const label = kind === "start" ? "Startzeit" : "Endzeit";
+    const value = await promptText(
+      kind === "start" ? "Anfang festlegen" : "Ende festlegen",
+      `${label} (z.B. 0:00 oder 11:25):`,
+      formatTimestampInput(defaultSec)
+    );
+    if (value === null) return;
+
+    const sec = parseTimestampInput(value);
+    if (!Number.isFinite(sec) || sec < 0) {
+      setStatus("Ungültige Zeit. Nutze z.B. 0:00, 11:25 oder 1:02:30.");
+      return;
+    }
+
+    const cutId = ensureCurrentTrackIsPlaylistCut();
+    if (!cutId) return;
+
+    const t = state.tracks[cutId];
+    if (!t) return;
+
+    if (kind === "start") {
+      const end = trackEndSec(cutId);
+      if (end && sec >= end) {
+        setStatus("Der Anfang muss vor dem Ende liegen.");
+        return;
+      }
+      t.startSec = Math.floor(sec);
+      t.url = trackUrlAtStart(cutId);
+      if (end) t.durationSec = Math.max(0, end - t.startSec);
+    } else {
+      const start = trackStartSec(cutId);
+      if (sec <= start) {
+        setStatus("Das Ende muss nach dem Anfang liegen.");
+        return;
+      }
+      t.endSec = Math.floor(sec);
+      t.durationSec = Math.max(0, t.endSec - start);
+    }
+
+    t.updatedAt = Date.now();
+    saveState();
+    renderList();
+    renderLoopSection();
+    updateNowSub();
+
+    if (currentIndex >= 0) {
+      const resumeAt = kind === "start" ? trackStartSec(cutId) : getCurrentPositionSec();
+      playIndex(currentIndex, { positionSec: resumeAt, broadcast: true });
+    }
+
+    setStatus(`${kind === "start" ? "Anfang" : "Ende"} für „${escapeHtml(displayTitle(t))}“ gesetzt.`);
+  }
+
+  async function setCurrentTags() {
+    if (!IS_HOST || !currentVid) return;
+
+    const t = state.tracks[currentVid];
+    if (!t) return;
+
+    const value = await promptText(
+      "Tags setzen",
+      "Tags, getrennt mit Komma:",
+      tagsText(t)
+    );
+    if (value === null) return;
+
+    t.tags = normalizeTags(value);
+    t.updatedAt = Date.now();
+    saveState();
+    renderList();
+    renderLoopSection();
+    setStatus(`Tags fÃ¼r â€ž${escapeHtml(displayTitle(t))}â€œ gespeichert.`);
+  }
+
+  async function setCurrentPlaylistTags() {
+    if (!IS_HOST || currentQueue.length === 0) return;
+
+    const value = await promptText(
+      "Playlist-Tag setzen",
+      "Tags, getrennt mit Komma:",
+      ""
+    );
+    if (value === null) return;
+
+    const tags = normalizeTags(value);
+    if (tags.length === 0) {
+      setStatus("Keine Tags eingegeben.");
+      return;
+    }
+
+    let changed = 0;
+    for (const vid of new Set(currentQueue)) {
+      const t = state.tracks[vid];
+      if (!t) continue;
+      const before = normalizeTags(t.tags);
+      const nextTags = normalizeTags([...before, ...tags]);
+      if (nextTags.join("\n") !== before.join("\n")) {
+        t.tags = nextTags;
+        t.updatedAt = Date.now();
+        changed++;
+      }
+    }
+
+    if (changed > 0) {
+      saveState();
+      renderList();
+      renderLoopSection();
+    }
+    setStatus(`Playlist-Tags auf <b>${changed}</b> Track(s) angewendet.`);
+  }
+
+  function deletePlaylistTracksEverywhere(playlistId) {
+    const pl = getPlaylistById(playlistId);
+    if (!pl) return 0;
+    const ids = Array.isArray(pl.trackIds) ? [...new Set(pl.trackIds)] : [];
+    for (const vid of ids) deleteTrackEverywhere(vid);
+    return ids.length;
+  }
+
+  function moveTrackInPlaylist(videoId, playlistId, direction) {
+    const pl = getPlaylistById(playlistId);
+    if (!pl) return false;
+    const idx = pl.trackIds.indexOf(videoId);
+    if (idx < 0) return false;
+    const newIdx = direction === "up" ? idx - 1 : idx + 1;
+    if (newIdx < 0 || newIdx >= pl.trackIds.length) return false;
+    const tmp = pl.trackIds[idx];
+    pl.trackIds[idx] = pl.trackIds[newIdx];
+    pl.trackIds[newIdx] = tmp;
+    saveState();
+    return true;
+  }
+
+  function addPlaylistToFolder(playlistId, folderId) {
+    if (!IS_HOST) return false;
+    const pl = getPlaylistById(playlistId);
+    const folder = getFolderById(folderId);
+    if (!pl || !folder) return false;
+    if (!Array.isArray(pl.folderIds)) pl.folderIds = [];
+    if (pl.folderIds.includes(folderId)) return false;
+    pl.folderIds.push(folderId);
+    saveState();
+    return true;
+  }
+
+  function removePlaylistFromFolder(playlistId, folderId) {
+    if (!IS_HOST) return false;
+    const pl = getPlaylistById(playlistId);
+    if (!pl) return false;
+    pl.folderIds = (pl.folderIds || []).filter(id => id !== folderId);
+    saveState();
+    return true;
+  }
+
+  function deleteFolder(folderId) {
+    if (!IS_HOST) return;
+    state.folders = state.folders.filter(f => f.id !== folderId);
+    for (const pl of state.playlists) {
+      pl.folderIds = (pl.folderIds || []).filter(id => id !== folderId);
+    }
+    saveState();
+  }
+
+  function currentVideoId() { return currentVid; }
+
+  function ensureCurrentTrackIsPlaylistCut() {
+    if (!IS_HOST || !currentVid) return null;
+
+    const currentTrack = state.tracks[currentVid];
+    if (!currentTrack) return null;
+    if (isSegmentTrack(currentTrack)) return currentVid;
+
+    const playlistId = playbackPlaylistId();
+    const pl = playlistId ? getPlaylistById(playlistId) : null;
+    if (!pl || !Array.isArray(pl.trackIds)) {
+      setStatus("Starte den Track aus einer Playlist, um einen playlist-spezifischen Schnitt zu setzen.");
+      return null;
+    }
+
+    const playlistIdx = pl.trackIds.indexOf(currentVid);
+    if (playlistIdx < 0) {
+      setStatus("Der aktuelle Track wurde in der aktiven Playlist nicht gefunden.");
+      return null;
+    }
+
+    const videoId = trackVideoId(currentVid);
+    const cutId = makeId(`cut_${videoId}`);
+    const now = Date.now();
+
+    state.tracks[cutId] = {
+      ...currentTrack,
+      id: cutId,
+      videoId,
+      source: isLocalTrack(currentTrack) ? "localCut" : "youtubeCut",
+      url: trackUrlAtStart(currentVid),
+      originalTitle: displayTitle(currentTrack),
+      customTitle: currentTrack.customTitle || "",
+      startSec: 0,
+      endSec: null,
+      durationSec: currentTrack.durationSec || 0,
+      parentTrackId: currentVid,
+      addedAt: now,
+      updatedAt: now
+    };
+
+    pl.trackIds[playlistIdx] = cutId;
+    if (currentQueue[currentIndex] === currentVid) currentQueue[currentIndex] = cutId;
+    viewQueue = viewQueue.map(id => id === currentVid ? cutId : id);
+    loopSelected = new Set(Array.from(loopSelected).map(id => id === currentVid ? cutId : id));
+    currentVid = cutId;
+    return cutId;
+  }
+
+  // -----------------------------
+  // Dialog helpers
+  // -----------------------------
+  function supportsDialog(d) { return typeof d?.showModal === "function"; }
+
+  function promptText(title, label, initialValue = "") {
+    if (!supportsDialog(el.dlgText)) {
+      const v = window.prompt(`${title}\n${label}`, initialValue);
+      return Promise.resolve(v === null ? null : String(v));
+    }
+    el.dlgTextTitle.textContent = title;
+    el.dlgTextLabel.textContent = label;
+    el.dlgTextInput.value = initialValue;
+    setTimeout(() => el.dlgTextInput.focus(), 0);
+    return new Promise(resolve => {
+      dlgResolve = resolve;
+      el.dlgText.showModal();
+    });
+  }
+
+  function promptSelect(title, label, options, initialValue = null) {
+    if (!supportsDialog(el.dlgSelect)) {
+      const names = options.map(o => o.label).join("\n");
+      const v = window.prompt(`${title}\n${label}\n\n${names}\n\nBitte exakten Namen eingeben:`, "");
+      if (v === null) return Promise.resolve(null);
+      const found = options.find(o => o.label === v);
+      return Promise.resolve(found ? found.value : null);
+    }
+    el.dlgSelectTitle.textContent = title;
+    el.dlgSelectLabel.textContent = label;
+    el.dlgSelectInput.innerHTML = "";
+    for (const opt of options) {
+      const o = document.createElement("option");
+      o.value = opt.value;
+      o.textContent = opt.label;
+      el.dlgSelectInput.appendChild(o);
+    }
+    if (initialValue !== null) el.dlgSelectInput.value = initialValue;
+    return new Promise(resolve => {
+      dlgResolve = resolve;
+      el.dlgSelect.showModal();
+    });
+  }
+
+  el.dlgTextOk.addEventListener("click", () => {
+    const v = el.dlgTextInput.value;
+    el.dlgText.close();
+    dlgResolve?.(String(v));
+    dlgResolve = null;
+  });
+  el.dlgTextCancel.addEventListener("click", () => {
+    el.dlgText.close();
+    dlgResolve?.(null);
+    dlgResolve = null;
+  });
+  el.dlgSelectOk.addEventListener("click", () => {
+    const v = el.dlgSelectInput.value;
+    el.dlgSelect.close();
+    dlgResolve?.(String(v));
+    dlgResolve = null;
+  });
+  el.dlgSelectCancel.addEventListener("click", () => {
+    el.dlgSelect.close();
+    dlgResolve?.(null);
+    dlgResolve = null;
+  });
+
+  // -----------------------------
+  // Socket sync
+  // -----------------------------
+  function updateConnectionUi(connected) {
+    el.roleBadge.className = "roleTag " + (connected ? (IS_HOST ? "host" : "guest") : "offline");
+    el.roleBadge.textContent = connected ? (IS_HOST ? "Host" : "Gast") : "Offline";
+    el.connStatus.textContent = connected ? "Server verbunden" : "Keine Serververbindung";
+  }
+
+  function sendPlaybackCommand(cmd) {
+    if (applyingRemoteCommand) return;
+    if (!socket?.connected) return;
+    socket.emit("playback:command", {
+      ...cmd,
+      sentAt: Date.now()
+    });
+  }
+
+  function broadcastCurrentTrack() {
+    if (!currentVid || currentIndex < 0) return;
+    const startSec = trackStartSec(currentVid);
+    const endSec = trackEndSec(currentVid);
+    let positionSec = getCurrentPositionSec();
+    if (startSec > 0 && (positionSec < startSec || (endSec && positionSec >= endSec))) {
+      positionSec = startSec;
+    }
+    sendPlaybackCommand({
+      type: "playTrack",
+      player: "main",
+      videoId: currentVid,
+      queue: currentQueue,
+      index: currentIndex,
+      positionSec,
+      loopContextKey
+    });
+  }
+
+  async function applyPlaybackCommand(cmd) {
+    applyingRemoteCommand = true;
+    try {
+      if (cmd.type === "playTrack") {
+        currentQueue = Array.isArray(cmd.queue) ? [...cmd.queue] : [];
+        currentIndex = Number.isInteger(cmd.index) ? cmd.index : currentQueue.indexOf(cmd.videoId);
+        currentVid = cmd.videoId;
+        loopContextKey = cmd.loopContextKey || "__remote__";
+        loadLoopSelectionForCurrentKey();
+        renderLoopSection();
+        if (currentIndex >= 0) playIndex(currentIndex, { positionSec: Number(cmd.positionSec || 0), broadcast: false });
+      }
+
+      if (cmd.type === "pause") {
+        pauseMainPlayback();
+      }
+
+      if (cmd.type === "resume") {
+        resumeMainPlayback(Number(cmd.positionSec || 0));
+      }
+
+      if (cmd.type === "stop") stopPlaybackUI({ broadcast: false });
+
+      if (cmd.type === "loopMode") {
+        el.loopMode.value = cmd.value || "off";
+        updateNowSub();
+        renderLoopSection();
+      }
+
+      if (cmd.type === "shuffle") {
+        state.ui.shuffleEnabled = !!cmd.value;
+        el.shuffleMode.checked = state.ui.shuffleEnabled;
+        cacheState();
+        updateNowSub();
+      }
+
+      if (cmd.type === "fxStart") {
+        fxVid = cmd.videoId;
+        if (fxVid && el.fxTrackSelect) el.fxTrackSelect.value = fxVid;
+        fxStart({ broadcast: false });
+      }
+
+      if (cmd.type === "fxStop") fxStop({ broadcast: false });
+	  if (cmd.type === "soundboardPlay") {
+  if (cmd.soundboardTrackId) {
+    soundboardPlayTrackId(cmd.soundboardTrackId, cmd.label, { broadcast: false });
+  } else {
+    soundboardPlayByVideoId(cmd.soundboardVideoId, cmd.label, { broadcast: false });
+  }
+}
+if (cmd.type === "soundboardStop") {
+  soundboardStop({ broadcast: false });
+}
+    } finally {
+      applyingRemoteCommand = false;
+    }
+  }
+
+  if (socket) {
+    updateConnectionUi(false);
+
+    socket.on("connect", () => updateConnectionUi(true));
+    socket.on("disconnect", () => updateConnectionUi(false));
+
+    socket.on("library:state", (serverState) => {
+      if (IS_HOST && importingPlaylist) {
+        return;
+      }
+
+      applyingRemoteState = true;
+      try {
+        state = normalizeState(serverState);
+el.shuffleMode.checked = !!state.ui.shuffleEnabled;
+mainApplyVolume();
+
+ensureSoundboardState(state);
+sbApplyVolume();
+
+cacheState();
+renderList();
+renderLoopSection();
+renderMgrIfOpen();
+renderSoundboard();
+
+if (fxReady) fxRenderSelectors();
+        setStatus(IS_HOST ? "Server-Bibliothek geladen. Host-Modus aktiv." : "Server-Bibliothek geladen. Gast-Modus aktiv.");
+      } finally {
+        applyingRemoteState = false;
+      }
+    });
+
+    socket.on("playback:state", (playbackState) => {
+      if (!playbackState?.videoId || !playbackState.playing) return;
+      applyPlaybackCommand({ type: "playTrack", ...playbackState });
+    });
+
+    socket.on("playback:command", (cmd) => applyPlaybackCommand(cmd));
+  } else {
+    updateConnectionUi(false);
+  }
+
+  // -----------------------------
+  // Rendering
+  // -----------------------------
+  function renderPlaylistSelect() {
+    el.folderSelect.innerHTML = "";
+    const folderSearch = (el.folderSelectSearch?.value || "").trim().toLocaleLowerCase("de");
+    const playlistSearch = (el.playlistSelectSearch?.value || "").trim().toLocaleLowerCase("de");
+
+    const optAll = document.createElement("option");
+    optAll.value = "__ALL__";
+    optAll.textContent = "Alle Titel";
+    el.folderSelect.appendChild(optAll);
+
+    const optNone = document.createElement("option");
+    optNone.value = "__NONE__";
+    optNone.textContent = "(kein Ordner)";
+    el.folderSelect.appendChild(optNone);
+
+    const selectedFolderId = state.ui.selectedFolderId;
+    const filteredFolders = state.folders.filter(f => {
+      const name = f.name || "(ohne Name)";
+      return !folderSearch || name.toLocaleLowerCase("de").includes(folderSearch) || f.id === selectedFolderId;
+    });
+
+    for (const f of filteredFolders) {
+      const o = document.createElement("option");
+      o.value = f.id;
+      o.textContent = f.name || "(ohne Name)";
+      el.folderSelect.appendChild(o);
+    }
+
+    const folderSel = state.ui.selectedFolderId;
+    const folderExists = folderSel === "__ALL__" || folderSel === "__NONE__" || state.folders.some(f => f.id === folderSel);
+    if (!folderExists) state.ui.selectedFolderId = "__ALL__";
+    el.folderSelect.value = state.ui.selectedFolderId;
+
+    el.playlistSelect.innerHTML = "";
+
+    if (state.ui.selectedFolderId === "__ALL__") {
+      el.playlistSelect.disabled = true;
+      const only = document.createElement("option");
+      only.value = ALL_VIEW_ID;
+      only.textContent = "—";
+      el.playlistSelect.appendChild(only);
+      state.ui.selectedPlaylistId = ALL_VIEW_ID;
+      el.renamePlaylistBtn.disabled = true;
+      el.deletePlaylistBtn.disabled = true;
+      el.addPlaylistToFolderBtn.disabled = true;
+      return;
+    }
+
+    el.playlistSelect.disabled = false;
+
+    const folderPlaylists = state.playlists.filter(pl => {
+      const ids = Array.isArray(pl.folderIds) ? pl.folderIds : [];
+      if (state.ui.selectedFolderId === "__NONE__") return ids.length === 0;
+      return ids.includes(state.ui.selectedFolderId);
+    });
+    const selectedPlaylistId = state.ui.selectedPlaylistId;
+    const visiblePlaylists = folderPlaylists.filter(pl => {
+      const name = pl.name || "(ohne Name)";
+      return !playlistSearch || name.toLocaleLowerCase("de").includes(playlistSearch) || pl.id === selectedPlaylistId;
+    });
+
+    for (const pl of visiblePlaylists) {
+      const opt = document.createElement("option");
+      opt.value = pl.id;
+      opt.textContent = pl.name || "(ohne Name)";
+      el.playlistSelect.appendChild(opt);
+    }
+
+    if (visiblePlaylists.length === 0) {
+      const empty = document.createElement("option");
+      empty.value = "__EMPTY__";
+      empty.textContent = folderPlaylists.length === 0 ? "(keine Playlists in diesem Ordner)" : "(keine Treffer)";
+      el.playlistSelect.appendChild(empty);
+      el.playlistSelect.disabled = true;
+      el.renamePlaylistBtn.disabled = true;
+      el.deletePlaylistBtn.disabled = true;
+      el.addPlaylistToFolderBtn.disabled = true;
+      return;
+    }
+
+    const sel = state.ui.selectedPlaylistId;
+    const exists = visiblePlaylists.some(p => p.id === sel);
+    if (!exists) state.ui.selectedPlaylistId = visiblePlaylists[0].id;
+    el.playlistSelect.value = state.ui.selectedPlaylistId;
+
+    const protectedPlaylist = state.ui.selectedPlaylistId === DEFAULT_PLAYLIST_ID || state.ui.selectedPlaylistId === OTHER_IMPORTS_ID;
+    el.renamePlaylistBtn.disabled = !IS_HOST || isAllViewSelected();
+    el.deletePlaylistBtn.disabled = !IS_HOST || isAllViewSelected() || protectedPlaylist;
+    el.addPlaylistToFolderBtn.disabled = !IS_HOST || isAllViewSelected() || state.folders.length === 0;
+  }
+
+  function orderedIdsForCurrentView() {
+    const order = el.orderMode.value;
+
+    if (isAllViewSelected()) {
+      const ids = Object.keys(state.tracks);
+      if (order === "added") {
+        ids.sort((a,b) => (state.tracks[a]?.addedAt || 0) - (state.tracks[b]?.addedAt || 0));
+        return ids;
+      }
+      ids.sort((a,b) => displayTitle(state.tracks[a]).localeCompare(displayTitle(state.tracks[b]), "de"));
+      return ids;
+    }
+
+    const pl = getPlaylistById(state.ui.selectedPlaylistId);
+    if (!pl) return [];
+    const ids = Array.isArray(pl.trackIds) ? [...pl.trackIds].filter(id => state.tracks[id]) : [];
+
+    if (order === "playlist") return ids;
+
+    if (order === "added") {
+      ids.sort((a,b) => (state.tracks[a]?.addedAt || 0) - (state.tracks[b]?.addedAt || 0));
+      return ids;
+    }
+
+    ids.sort((a,b) => displayTitle(state.tracks[a]).localeCompare(displayTitle(state.tracks[b]), "de"));
+    return ids;
+  }
+
+  function orderedIdsForAllTracks() {
+    const ids = Object.keys(state.tracks);
+    const order = el.orderMode.value;
+
+    if (order === "added") {
+      ids.sort((a,b) => (state.tracks[a]?.addedAt || 0) - (state.tracks[b]?.addedAt || 0));
+      return ids;
+    }
+
+    ids.sort((a,b) => displayTitle(state.tracks[a]).localeCompare(displayTitle(state.tracks[b]), "de"));
+    return ids;
+  }
+
+  function trackMatchesSearch(id, searchTerm) {
+    const t = state.tracks[id];
+    const titleText = t ? displayTitle(t) : id;
+    const tagText = tagsText(t);
+    return titleText.toLocaleLowerCase("de").includes(searchTerm)
+      || tagText.toLocaleLowerCase("de").includes(searchTerm);
+  }
+
+  function renderList() {
+    renderPlaylistSelect();
+
+    const allIds = orderedIdsForCurrentView();
+    const searchTerm = (el.librarySearch?.value || "").trim().toLocaleLowerCase("de");
+    let usingGlobalSearchFallback = false;
+    let ids = searchTerm
+      ? allIds.filter(id => trackMatchesSearch(id, searchTerm))
+      : allIds;
+
+    if (searchTerm && ids.length === 0 && !isAllViewSelected()) {
+      ids = orderedIdsForAllTracks().filter(id => trackMatchesSearch(id, searchTerm));
+      usingGlobalSearchFallback = ids.length > 0;
+    }
+
+    viewQueue = ids;
+    el.list.innerHTML = "";
+
+    if (allIds.length === 0) {
+      const plName = isAllViewSelected() ? "Alle Titel" : (getPlaylistById(state.ui.selectedPlaylistId)?.name || "Playlist");
+      el.list.innerHTML = `<div class="hint">In „${escapeHtml(plName)}“ sind noch keine Tracks. Füge einen YouTube-Link hinzu oder importiere eine Playlist.</div>`;
+      updateButtons();
+      return;
+    }
+
+    if (ids.length === 0) {
+      el.list.innerHTML = `<div class="hint">Keine Treffer in dieser Liste.</div>`;
+      setStatus(`<b>0</b> Treffer von <b>${allIds.length}</b> Track(s).`);
+      updateButtons();
+      return;
+    }
+
+    if (usingGlobalSearchFallback) {
+      const hint = document.createElement("div");
+      hint.className = "hint";
+      hint.textContent = "Keine Treffer in der aktuellen Playlist. Zeige Treffer aus allen Tracks.";
+      el.list.appendChild(hint);
+    }
+
+    for (const videoId of ids) {
+      const t = state.tracks[videoId];
+      if (!t) continue;
+
+      const card = document.createElement("div");
+      card.className = "card";
+
+      const img = document.createElement("img");
+      img.className = "thumb";
+      img.src = trackThumbUrl(videoId);
+      img.alt = "";
+
+      const meta = document.createElement("div");
+      meta.className = "meta";
+
+      const title = document.createElement("p");
+      title.className = "title";
+      title.textContent = displayTitle(t);
+
+      const sub = document.createElement("p");
+      sub.className = "sub";
+      sub.innerHTML = [
+        `<span class="tag">${isLocalTrack(t) ? "Lokal" : "YouTube"}</span>`,
+        `<span class="tag">Dauer: ${formatDuration(t.durationSec)}</span>`,
+        t.startSec ? `<span class="tag">Start: ${formatDuration(t.startSec)}</span>` : "",
+        t.endSec ? `<span class="tag">Ende: ${formatDuration(t.endSec)}</span>` : "",
+        tagsText(t) ? `<span class="tag">Tags: ${escapeHtml(tagsText(t))}</span>` : "",
+        `<span class="tag">ID: ${escapeHtml(trackVideoId(videoId))}</span>`
+      ].filter(Boolean).join("");
+
+      meta.appendChild(title);
+      meta.appendChild(sub);
+
+      const btnCol = document.createElement("div");
+      btnCol.className = "btnCol";
+
+      const play = document.createElement("button");
+      play.textContent = "Play";
+      play.addEventListener("click", () => {
+        currentQueue = [...viewQueue];
+        loopContextKey = isAllViewSelected() ? "all" : `playlist:${state.ui.selectedPlaylistId}`;
+        loadLoopSelectionForCurrentKey();
+        renderLoopSection();
+        const idx = currentQueue.indexOf(videoId);
+        playIndex(idx, { broadcast: true });
+      });
+      btnCol.appendChild(play);
+
+      if (IS_HOST) {
+        const actionsRow = document.createElement("div");
+        actionsRow.className = "miniBtnRow";
+
+        const addTo = document.createElement("button");
+        addTo.textContent = "Zu Playlist…";
+        addTo.addEventListener("click", async () => {
+          const opts = state.playlists.map(p => ({ value: p.id, label: p.name }));
+          const chosen = await promptSelect("Zu Playlist hinzufügen", "Ziel-Playlist wählen:", opts, selectedPlaylistIdForAdding());
+          if (!chosen) return;
+          const ok = ensureTrackInPlaylist(videoId, chosen, "end");
+          setStatus(ok ? "Track zur Playlist hinzugefügt." : "Track war bereits in der Playlist.");
+          renderList();
+        });
+        actionsRow.appendChild(addTo);
+
+        if (!isAllViewSelected()) {
+          const plId = state.ui.selectedPlaylistId;
+
+          const up = document.createElement("button");
+          up.textContent = "↑";
+          up.title = "In Playlist nach oben";
+          up.addEventListener("click", () => { if (moveTrackInPlaylist(videoId, plId, "up")) renderList(); });
+
+          const down = document.createElement("button");
+          down.textContent = "↓";
+          down.title = "In Playlist nach unten";
+          down.addEventListener("click", () => { if (moveTrackInPlaylist(videoId, plId, "down")) renderList(); });
+
+          actionsRow.appendChild(up);
+          actionsRow.appendChild(down);
+
+          const removeFromPl = document.createElement("button");
+          removeFromPl.textContent = "Aus Playlist entfernen";
+          removeFromPl.addEventListener("click", () => {
+            removeTrackFromPlaylist(videoId, plId);
+            renderList();
+          });
+
+          btnCol.appendChild(actionsRow);
+          btnCol.appendChild(removeFromPl);
+        } else {
+          btnCol.appendChild(actionsRow);
+        }
+      }
+
+      card.appendChild(img);
+      card.appendChild(meta);
+      card.appendChild(btnCol);
+      el.list.appendChild(card);
+    }
+
+    const viewName = isAllViewSelected() ? "Alle Titel" : (getPlaylistById(state.ui.selectedPlaylistId)?.name || "Playlist");
+    setStatus(usingGlobalSearchFallback
+      ? `<b>${ids.length}</b> Treffer in allen Tracks, keine Treffer in "${escapeHtml(viewName)}".`
+      : searchTerm
+      ? `<b>${ids.length}</b> Treffer von <b>${allIds.length}</b> Track(s) in „${escapeHtml(viewName)}“.`
+      : `<b>${ids.length}</b> Track(s) in „${escapeHtml(viewName)}“.`
+    );
+    updateButtons();
+    if (fxReady) fxRenderSelectors();
+  }
+
+  function updateButtons() {
+    const hasCurrentQueue = currentQueue.length > 0;
+    const hasCurrent = !!currentVid;
+    const ready = isMainPlaybackReady();
+
+    el.playBtn.disabled = !ready || (!hasCurrentQueue && viewQueue.length === 0);
+    el.pauseBtn.disabled = !ready || !hasCurrent;
+    el.prevBtn.disabled = !ready || !hasCurrent;
+    el.nextBtn.disabled = !ready || !hasCurrent;
+    el.stopBtn.disabled = !ready || !hasCurrent;
+    el.setStartBtn.disabled = !IS_HOST || !ready || !hasCurrent;
+    el.setEndBtn.disabled = !IS_HOST || !ready || !hasCurrent;
+    el.setTagsBtn.disabled = !IS_HOST || !hasCurrent;
+
+    el.renameCurrentBtn.disabled = !IS_HOST || !hasCurrent;
+    el.deleteCurrentBtn.disabled = !IS_HOST || !hasCurrent;
+
+    el.loopAllBtn.disabled = currentQueue.length === 0;
+    el.loopNoneBtn.disabled = currentQueue.length === 0;
+
+    if (!hasCurrent) {
+      el.nowPlaying.textContent = "Nichts spielt";
+      el.nowSub.textContent = "";
+    }
+  }
+
+  function updateNowSub() {
+    const t = currentVid ? state.tracks[currentVid] : null;
+    const dur = t ? formatDuration(t.durationSec) : "—";
+    if (currentVid) {
+      el.nowSub.textContent = `Dauer: ${dur} · Loop: ${loopLabel(el.loopMode.value)}` + (state.ui.shuffleEnabled ? " · Shuffle" : "");
+    }
+  }
+
+  function mainApplyVolume() {
+    const v = Math.max(0, Math.min(100, Number(el.mainVol.value || 0)));
+    el.mainVolLabel.textContent = `${v}%`;
+    if (playerReady && player) {
+      try { player.setVolume(v); } catch {}
+    }
+    if (el.localMediaPlayer) {
+      try { el.localMediaPlayer.volume = v / 100; } catch {}
+    }
+  }
+
+  function stopPlaybackUI({ broadcast = true } = {}) {
+    clearInterval(segmentEndTimer);
+    segmentEndTimer = null;
+    currentIndex = -1;
+    currentVid = null;
+    try { player?.stopVideo?.(); } catch {}
+    try {
+      el.localMediaPlayer?.pause?.();
+      if (el.localMediaPlayer) el.localMediaPlayer.currentTime = 0;
+    } catch {}
+    el.nowPlaying.textContent = "Nichts spielt";
+    el.nowSub.textContent = "";
+    updateButtons();
+    renderLoopSection();
+    if (broadcast) sendPlaybackCommand({ type: "stop" });
+  }
+
+  // -----------------------------
+  // YouTube Players
+  // -----------------------------
+  function ensurePlayerLoaded() {
+    if (window.YT && window.YT.Player) return;
+    const tag = document.createElement("script");
+    tag.src = "https://www.youtube.com/iframe_api";
+    document.head.appendChild(tag);
+  }
+
+  function hideUnlockPlaybackButton() {
+    playbackUnlocked = true;
+    if (el.unlockPlaybackBtn) el.unlockPlaybackBtn.style.display = "none";
+  }
+
+  function runPlaybackUnlock() {
+    const videoId = firstYouTubeUnlockVideoId();
+    if (!videoId || playbackUnlocked) {
+      hideUnlockPlaybackButton();
+      return;
+    }
+
+    if (!window.YT || typeof YT.Player !== "function") {
+      setStatus("YouTube-Player ist noch nicht bereit. Bitte kurz warten und erneut klicken.");
+      return;
+    }
+
+    const startUnlock = () => {
+      try {
+        youtubeUnlockPlayer.mute?.();
+        youtubeUnlockPlayer.setVolume?.(0);
+        youtubeUnlockPlayer.loadVideoById?.(videoId);
+        youtubeUnlockPlayer.playVideo?.();
+      } catch {}
+
+      setTimeout(() => {
+        try {
+          youtubeUnlockPlayer.stopVideo?.();
+          youtubeUnlockPlayer.clearVideo?.();
+        } catch {}
+        hideUnlockPlaybackButton();
+        setStatus("Wiedergabe vorbereitet.");
+      }, 700);
+    };
+
+    if (!youtubeUnlockPlayer) {
+      youtubeUnlockPlayer = new YT.Player("youtubeUnlockPlayer", {
+        height: "1",
+        width: "1",
+        videoId: "",
+        playerVars: {
+          controls: 0,
+          modestbranding: 1,
+          rel: 0,
+          playsinline: 1,
+          origin: window.location.origin
+        },
+        events: {
+          onReady: startUnlock
+        }
+      });
+      return;
+    }
+
+    startUnlock();
+  }
+
+  window.onYouTubeIframeAPIReady = function() {
+    player = new YT.Player("player", {
+      height: "236",
+      width: "420",
+      videoId: "",
+      playerVars: {
+        controls: 1,
+        modestbranding: 1,
+        rel: 0,
+        playsinline: 1,
+        origin: window.location.origin
+      },
+      events: {
+        onReady: () => { playerReady = true; mainApplyVolume(); updateButtons(); },
+        onStateChange: onPlayerStateChange
+      }
+    });
+
+    fxPlayer = new YT.Player("fxPlayer", {
+      height: "236",
+      width: "420",
+      videoId: "",
+      playerVars: {
+        controls: 1,
+        modestbranding: 1,
+        rel: 0,
+        playsinline: 1,
+        origin: window.location.origin
+      },
+      events: {
+        onReady: () => {
+          fxReady = true;
+          fxUpdateButtons();
+          fxRenderSelectors();
+          fxApplyVolume();
+        },
+        onStateChange: fxOnStateChange
+      }
+    });
+	
+	soundboardPlayer = new YT.Player("soundboardPlayer", {
+  height: "113",
+  width: "200",
+  videoId: "",
+  playerVars: {
+    controls: 0,
+    modestbranding: 1,
+    rel: 0,
+    playsinline: 1,
+    origin: window.location.origin
+  },
+  events: {
+    onReady: () => {
+      soundboardReady = true;
+      sbApplyVolume();
+      renderSoundboard();
+    },
+    onStateChange: sbOnStateChange
+  }
+});
+  };
+
+  function setMainPlayerMode(mode) {
+    activeMainPlayer = mode;
+
+    const local = el.localMediaPlayer;
+    if (local) local.style.display = mode === "local" ? "block" : "none";
+
+    const ytNode = document.getElementById("player");
+    if (ytNode) ytNode.style.display = mode === "youtube" ? "block" : "none";
+
+    if (mode === "local") {
+      try { player?.stopVideo?.(); } catch {}
+    } else {
+      try {
+        if (local) {
+          local.pause();
+          local.removeAttribute("src");
+          local.load();
+        }
+      } catch {}
+    }
+  }
+
+  function isMainPlaybackReady() {
+    return playerReady || !!el.localMediaPlayer;
+  }
+
+  function pauseMainPlayback() {
+    if (activeMainPlayer === "local") {
+      try { el.localMediaPlayer?.pause?.(); } catch {}
+    } else {
+      try { player?.pauseVideo?.(); } catch {}
+    }
+  }
+
+  function resumeMainPlayback(positionSec = null) {
+    if (activeMainPlayer === "local") {
+      try {
+        if (Number.isFinite(positionSec) && positionSec > 0) el.localMediaPlayer.currentTime = positionSec;
+        el.localMediaPlayer?.play?.();
+      } catch {}
+    } else {
+      try {
+        if (Number.isFinite(positionSec) && positionSec > 0) player?.seekTo?.(positionSec, true);
+        player?.playVideo?.();
+      } catch {}
+    }
+  }
+
+  function onPlayerStateChange(event) {
+    if (!player) return;
+
+    if (event.data === YT.PlayerState.PLAYING) {
+      const dur = player.getDuration();
+      const vid = currentVid;
+      if (vid && Number.isFinite(dur) && dur > 0) {
+        const t = state.tracks[vid];
+        if (t && !t.startSec && (!t.durationSec || t.durationSec <= 0)) {
+          t.durationSec = Math.floor(dur);
+          t.updatedAt = Date.now();
+          saveState();
+          renderList();
+        }
+        if (t && !t.startSec && (!t.originalTitle || t.originalTitle.startsWith("(Titel"))) {
+          const data = player.getVideoData?.();
+          if (data?.title) {
+            t.originalTitle = data.title;
+            t.updatedAt = Date.now();
+            saveState();
+            renderList();
+            el.nowPlaying.textContent = displayTitle(t);
+          }
+        }
+      }
+    }
+
+    if (event.data === YT.PlayerState.ENDED) handleEnded();
+  }
+
+  function loopLabel(mode) {
+    if (mode === "track") return "Track";
+    if (mode === "list") return "Playlist";
+    if (mode === "selection") return "Auswahl";
+    return "Aus";
+  }
+
+  function playIndex(idx, opts = {}) {
+    const { positionSec = 0, broadcast = false } = opts;
+    if (idx < 0 || idx >= currentQueue.length) return;
+
+    clearInterval(segmentEndTimer);
+    segmentEndTimer = null;
+
+    currentIndex = idx;
+    currentVid = currentQueue[currentIndex];
+
+    const t = state.tracks[currentVid];
+    const playableVideoId = trackVideoId(currentVid);
+    const startSec = positionSec > 0 ? positionSec : trackStartSec(currentVid);
+    const endSec = trackEndSec(currentVid);
+    el.nowPlaying.textContent = t ? displayTitle(t) : "(unbekannt)";
+    updateNowSub();
+
+    if (isLocalTrack(t)) {
+      const mediaUrl = trackMediaUrl(currentVid);
+      if (!mediaUrl || !el.localMediaPlayer) {
+        setStatus("Lokale Datei konnte nicht geladen werden.");
+        return;
+      }
+
+      setMainPlayerMode("local");
+      el.localMediaPlayer.src = mediaUrl;
+      el.localMediaPlayer.onloadedmetadata = () => {
+        try { el.localMediaPlayer.currentTime = startSec; } catch {}
+      };
+      mainApplyVolume();
+      el.localMediaPlayer.play().catch(() => {
+        setStatus("Lokale Datei ist geladen. Falls der Browser Autoplay blockiert, bitte Play drÃ¼cken.");
+      });
+    } else {
+      if (!playerReady || !player) {
+        setStatus("YouTube-Player ist noch nicht bereit. Bitte kurz warten und erneut versuchen.");
+        return;
+      }
+
+      setMainPlayerMode("youtube");
+      try {
+        if (startSec > 0 || endSec) {
+          const payload = { videoId: playableVideoId, startSeconds: startSec };
+          if (endSec) payload.endSeconds = endSec;
+          player.loadVideoById(payload);
+        } else {
+          player.loadVideoById(playableVideoId);
+        }
+      } catch {
+        player.loadVideoById(playableVideoId);
+      }
+    }
+
+    if (endSec) {
+      segmentEndTimer = setInterval(() => {
+        try {
+          const currentTime = activeMainPlayer === "local"
+            ? el.localMediaPlayer.currentTime
+            : player?.getCurrentTime?.();
+          const isPlaying = activeMainPlayer === "local"
+            ? !el.localMediaPlayer.paused
+            : player?.getPlayerState?.() === YT.PlayerState.PLAYING;
+          if (currentVid && isPlaying && currentTime >= endSec - 0.15) {
+            clearInterval(segmentEndTimer);
+            segmentEndTimer = null;
+            handleEnded();
+          }
+        } catch {}
+      }, 500);
+    }
+
+    updateButtons();
+    renderLoopSection();
+
+    if (broadcast) broadcastCurrentTrack();
+  }
+
+  function pickRandomIndexFromAllowed(allowedIdxs, excludeIdx) {
+    if (!allowedIdxs.length) return -1;
+    let pool = allowedIdxs;
+    if (allowedIdxs.length > 1 && Number.isInteger(excludeIdx)) {
+      pool = allowedIdxs.filter(i => i !== excludeIdx);
+      if (!pool.length) pool = allowedIdxs;
+    }
+    const r = Math.floor(Math.random() * pool.length);
+    return pool[r];
+  }
+
+  function getShuffleNextIndex(mode) {
+    if (currentQueue.length === 0) return -1;
+    if (mode === "selection") {
+      const allowedIdxs = [];
+      for (let i = 0; i < currentQueue.length; i++) {
+        if (loopSelected.has(currentQueue[i])) allowedIdxs.push(i);
+      }
+      return pickRandomIndexFromAllowed(allowedIdxs, currentIndex);
+    }
+    const allIdxs = Array.from({ length: currentQueue.length }, (_, i) => i);
+    return pickRandomIndexFromAllowed(allIdxs, currentIndex);
+  }
+
+  function nextIndexInSelection(fromIdx) {
+    if (currentQueue.length === 0) return -1;
+    const allowed = (vid) => loopSelected.has(vid);
+    for (let i = fromIdx + 1; i < currentQueue.length; i++) if (allowed(currentQueue[i])) return i;
+    for (let i = 0; i <= fromIdx; i++) if (allowed(currentQueue[i])) return i;
+    return -1;
+  }
+
+  function computeNextIndex() {
+    const mode = el.loopMode.value;
+
+    if (mode === "track") return currentIndex;
+
+    if (state.ui.shuffleEnabled) {
+      return getShuffleNextIndex(mode);
+    }
+
+    if (mode === "selection") {
+      if (loopSelected.size === 0) return -1;
+      return nextIndexInSelection(currentIndex);
+    }
+
+    const nextIdx = currentIndex + 1;
+    if (nextIdx < currentQueue.length) return nextIdx;
+    if (mode === "list" && currentQueue.length > 0) return 0;
+    return -1;
+  }
+
+  function computePrevIndex() {
+    if (currentQueue.length === 0) return -1;
+    if (currentIndex <= 0) {
+      return el.loopMode.value === "list" ? currentQueue.length - 1 : 0;
+    }
+    return currentIndex - 1;
+  }
+
+  function goNext({ broadcast = true } = {}) {
+    if (currentQueue.length === 0) return;
+    const idx = computeNextIndex();
+    if (idx >= 0) playIndex(idx, { broadcast });
+    else stopPlaybackUI({ broadcast });
+  }
+
+  function goPrev({ broadcast = true } = {}) {
+    if (currentQueue.length === 0) return;
+    const idx = computePrevIndex();
+    if (idx >= 0) playIndex(idx, { broadcast });
+  }
+
+  function handleEnded() {
+    // Host is the authority for automatic advancement. Guests may advance locally,
+    // but only host broadcasts the next actual track.
+    goNext({ broadcast: IS_HOST });
+  }
+
+  // -----------------------------
+  // Loop section
+  // -----------------------------
+  function getCurrentLoopKey() { return loopContextKey || "__session__"; }
+
+  function loadLoopSelectionForCurrentKey() {
+    const key = getCurrentLoopKey();
+    const saved = state.ui.loopSelections?.[key];
+    const ids = Array.isArray(currentQueue) ? currentQueue : [];
+    const defaultArr = ids.slice();
+    const arr = Array.isArray(saved) ? saved : defaultArr;
+    loopSelected = new Set(arr.filter(id => ids.includes(id)));
+  }
+
+  function saveLoopSelectionForCurrentKey() {
+    const key = getCurrentLoopKey();
+    if (!state.ui.loopSelections) state.ui.loopSelections = {};
+    state.ui.loopSelections[key] = Array.from(loopSelected);
+    if (IS_HOST) saveState();
+    else cacheState();
+  }
+
+  function renderLoopSection() {
+    const hasPlaybackQueue = currentQueue.length > 0;
+    el.loopAllBtn.disabled = !hasPlaybackQueue;
+    el.loopNoneBtn.disabled = !hasPlaybackQueue;
+    el.setPlaylistTagsBtn.disabled = !IS_HOST || !hasPlaybackQueue;
+    el.loopList.innerHTML = "";
+
+    if (el.loopSearch) {
+      el.loopSearch.disabled = !hasPlaybackQueue;
+    }
+
+    if (!hasPlaybackQueue) {
+      el.loopHint.style.display = "block";
+      return;
+    }
+
+    el.loopHint.style.display = "none";
+
+    const searchTerm = (el.loopSearch?.value || "").trim().toLocaleLowerCase("de");
+    let visibleCount = 0;
+
+    for (const vid of currentQueue) {
+      const t = state.tracks[vid];
+      const titleText = t ? displayTitle(t) : vid;
+      const tagText = tagsText(t);
+
+      if (searchTerm
+        && !titleText.toLocaleLowerCase("de").includes(searchTerm)
+        && !tagText.toLocaleLowerCase("de").includes(searchTerm)) {
+        continue;
+      }
+
+      visibleCount++;
+      const row = document.createElement("div");
+      row.className = "loopItem";
+
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.checked = loopSelected.has(vid);
+      cb.addEventListener("change", () => {
+        if (cb.checked) loopSelected.add(vid);
+        else loopSelected.delete(vid);
+        saveLoopSelectionForCurrentKey();
+      });
+
+      const title = document.createElement("div");
+      title.className = "loopTitle";
+      title.textContent = titleText;
+
+      const playBtn = document.createElement("button");
+      playBtn.className = "loopPlayBtn";
+      playBtn.textContent = "▶";
+
+      const isActive = vid === currentVid;
+      if (isActive) row.classList.add("active");
+      playBtn.classList.toggle("active", isActive);
+
+      playBtn.title = "Diesen Track abspielen";
+      playBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        el.loopMode.value = "track";
+        sendPlaybackCommand({ type: "loopMode", value: "track" });
+        const idx = currentQueue.indexOf(vid);
+        if (idx >= 0) playIndex(idx, { broadcast: true });
+      });
+
+      row.appendChild(cb);
+      row.appendChild(title);
+      row.appendChild(playBtn);
+      el.loopList.appendChild(row);
+    }
+
+    if (visibleCount === 0) {
+      el.loopList.innerHTML = `<div class="hint" style="margin-top:0;">Keine Treffer in dieser Playlist.</div>`;
+    }
+  }
+
+  // -----------------------------
+  // FX Player
+  // -----------------------------
+  function setFxPlayerMode(mode) {
+    activeFxPlayer = mode;
+
+    const local = el.fxLocalMediaPlayer;
+    if (local) local.style.display = mode === "local" ? "block" : "none";
+
+    const ytNode = document.getElementById("fxPlayer");
+    if (ytNode) ytNode.style.display = mode === "youtube" ? "block" : "none";
+
+    if (mode === "local") {
+      try { fxPlayer?.stopVideo?.(); } catch {}
+    } else {
+      try {
+        if (local) {
+          local.pause();
+          local.removeAttribute("src");
+          local.load();
+        }
+      } catch {}
+    }
+  }
+
+  function fxSelectedVideoId() {
+    const selected = el.fxTrackSelect && !el.fxTrackSelect.disabled
+      ? el.fxTrackSelect.value
+      : null;
+
+    return selected && selected !== "__EMPTY__" ? selected : null;
+  }
+
+  function fxUpdateButtons() {
+    const hasTrack = !!fxVid || !!fxSelectedVideoId();
+    el.fxPlayBtn.disabled = !fxReady || !hasTrack;
+    el.fxStopBtn.disabled = !fxReady || !fxPlaying;
+  }
+
+  function fxApplyVolume() {
+    const v = Number(el.fxVol.value || 0);
+    el.fxVolLabel.textContent = `${v}%`;
+    if (fxReady && fxPlayer) {
+      try { fxPlayer.setVolume(v); } catch {}
+      if (v > 0) {
+        try { fxPlayer.unMute(); } catch {}
+      }
+    }
+    if (el.fxLocalMediaPlayer) {
+      try { el.fxLocalMediaPlayer.volume = v / 100; } catch {}
+    }
+  }
+
+  function fxOnStateChange(event) {
+    if (!fxPlayer) return;
+    if (event.data === YT.PlayerState.PLAYING || event.data === YT.PlayerState.BUFFERING) {
+      fxPlaying = true;
+      fxUpdateButtons();
+    }
+    if (event.data === YT.PlayerState.CUED || event.data === YT.PlayerState.UNSTARTED) {
+      fxPlaying = false;
+      fxUpdateButtons();
+    }
+    if (event.data === YT.PlayerState.ENDED) {
+      try {
+        fxPlayer.seekTo(0, true);
+        fxPlayer.playVideo();
+      } catch {}
+    }
+  }
+
+  function fxGetFolderFilteredPlaylists() {
+    const folderId = el.fxFolderSelect.value;
+    if (folderId === "__NONE__") return state.playlists.filter(p => (p.folderIds || []).length === 0);
+    return state.playlists.filter(p => (p.folderIds || []).includes(folderId));
+  }
+
+  function fxRenderSelectors() {
+  const previousFolderId = el.fxFolderSelect?.value || "__NONE__";
+
+  el.fxFolderSelect.innerHTML = "";
+
+  const optNone = document.createElement("option");
+  optNone.value = "__NONE__";
+  optNone.textContent = "(kein Ordner)";
+  el.fxFolderSelect.appendChild(optNone);
+
+  for (const f of state.folders) {
+    const o = document.createElement("option");
+    o.value = f.id;
+    o.textContent = f.name || "(ohne Name)";
+    el.fxFolderSelect.appendChild(o);
+  }
+
+  const folderStillExists =
+    previousFolderId === "__NONE__" ||
+    state.folders.some(f => f.id === previousFolderId);
+
+  el.fxFolderSelect.value = folderStillExists ? previousFolderId : "__NONE__";
+
+  fxRenderPlaylistAndTracks();
+}
+
+  function fxRenderPlaylistAndTracks() {
+    const pls = fxGetFolderFilteredPlaylists()
+      .filter(p => p.id !== DEFAULT_PLAYLIST_ID)
+      .slice()
+      .sort((a,b) => (a.name||"").localeCompare((b.name||""), "de"));
+
+    el.fxPlaylistSelect.innerHTML = "";
+    for (const p of pls) {
+      const o = document.createElement("option");
+      o.value = p.id;
+      o.textContent = p.name || "(ohne Name)";
+      el.fxPlaylistSelect.appendChild(o);
+    }
+
+    if (!pls.length) {
+      const o = document.createElement("option");
+      o.value = "__EMPTY__";
+      o.textContent = "(keine Playlists)";
+      el.fxPlaylistSelect.appendChild(o);
+      el.fxPlaylistSelect.disabled = true;
+      fxQueue = [];
+      fxVid = null;
+      el.fxNow.textContent = "Aus";
+      fxRenderTrackSelect();
+      fxUpdateButtons();
+      return;
+    }
+
+    el.fxPlaylistSelect.disabled = false;
+    if (!fxPlaylistId || !pls.some(p => p.id === fxPlaylistId)) fxPlaylistId = pls[0].id;
+    el.fxPlaylistSelect.value = fxPlaylistId;
+
+    const pl = state.playlists.find(p => p.id === fxPlaylistId);
+    fxQueue = pl ? (pl.trackIds || []).filter(id => state.tracks[id]) : [];
+    fxRenderTrackSelect();
+    fxUpdateButtons();
+  }
+
+function fxRenderTrackSelect() {
+  el.fxTrackSelect.innerHTML = "";
+
+  if (!fxQueue.length) {
+    const o = document.createElement("option");
+    o.value = "__EMPTY__";
+    o.textContent = "(Playlist ist leer)";
+    el.fxTrackSelect.appendChild(o);
+    el.fxTrackSelect.disabled = true;
+    fxVid = null;
+    el.fxNow.textContent = "Aus";
+    fxUpdateButtons();
+    return;
+  }
+
+  const searchTerm = (el.fxTrackSearch?.value || "").trim().toLocaleLowerCase("de");
+
+  const visibleFxQueue = searchTerm
+    ? fxQueue.filter(vid => {
+        const t = state.tracks[vid];
+        const titleText = t ? displayTitle(t) : vid;
+        const tagText = tagsText(t);
+        return titleText.toLocaleLowerCase("de").includes(searchTerm)
+          || tagText.toLocaleLowerCase("de").includes(searchTerm);
+      })
+    : fxQueue;
+
+  if (!visibleFxQueue.length) {
+    const o = document.createElement("option");
+    o.value = "__EMPTY__";
+    o.textContent = "(keine Treffer)";
+    el.fxTrackSelect.appendChild(o);
+    el.fxTrackSelect.disabled = true;
+    fxVid = null;
+    el.fxNow.textContent = "Aus";
+    fxUpdateButtons();
+    return;
+  }
+
+  el.fxTrackSelect.disabled = false;
+
+  for (const vid of visibleFxQueue) {
+    const t = state.tracks[vid];
+    const o = document.createElement("option");
+    o.value = vid;
+    o.textContent = t ? displayTitle(t) : vid;
+    el.fxTrackSelect.appendChild(o);
+  }
+
+  if (!fxVid || !visibleFxQueue.includes(fxVid)) {
+    fxVid = visibleFxQueue[0];
+  }
+
+  el.fxTrackSelect.value = fxVid;
+
+  const t = state.tracks[fxVid];
+  el.fxNow.textContent = t ? displayTitle(t) : fxVid;
+
+  fxUpdateButtons();
+}
+
+  function fxStart({ broadcast = true } = {}) {
+    fxVid = fxVid || fxSelectedVideoId();
+    if (!fxReady || !fxVid) return;
+    const t = state.tracks[fxVid];
+    if (fxSelectedVideoId() !== fxVid && el.fxTrackSelect && !el.fxTrackSelect.disabled) {
+      el.fxTrackSelect.value = fxVid;
+    }
+    el.fxNow.textContent = t ? displayTitle(t) : fxVid;
+
+    if (isLocalTrack(t)) {
+      const mediaUrl = trackMediaUrl(fxVid);
+      if (!mediaUrl || !el.fxLocalMediaPlayer) {
+        setStatus("Lokale FX-Datei konnte nicht geladen werden.");
+        return;
+      }
+
+      setFxPlayerMode("local");
+      el.fxLocalMediaPlayer.loop = true;
+      el.fxLocalMediaPlayer.src = mediaUrl;
+      fxApplyVolume();
+      fxPlaying = true;
+      el.fxLocalMediaPlayer.play().catch(() => {
+        setStatus("Lokale FX-Datei ist geladen. Falls der Browser Autoplay blockiert, bitte FX Start erneut drÃ¼cken.");
+      });
+    } else {
+      if (!fxPlayer) return;
+      setFxPlayerMode("youtube");
+      try {
+        fxPlayer.loadVideoById(trackVideoId(fxVid));
+        fxApplyVolume();
+        fxPlayer.playVideo();
+        fxPlaying = true;
+        setTimeout(() => {
+          try {
+            fxApplyVolume();
+            fxPlayer.playVideo();
+          } catch {}
+        }, 250);
+      } catch {}
+    }
+
+    fxUpdateButtons();
+    if (broadcast) sendPlaybackCommand({ type: "fxStart", videoId: fxVid });
+  }
+
+  function fxStop({ broadcast = true } = {}) {
+    if (!fxReady) return;
+    try { fxPlayer.stopVideo(); } catch {}
+    try {
+      el.fxLocalMediaPlayer?.pause?.();
+      if (el.fxLocalMediaPlayer) el.fxLocalMediaPlayer.currentTime = 0;
+    } catch {}
+    fxPlaying = false;
+    el.fxNow.textContent = "Aus";
+    fxUpdateButtons();
+    if (broadcast) sendPlaybackCommand({ type: "fxStop" });
+  }
+  function sbApplyVolume() {
+  const v = Number(el.sbVol.value || 45);
+  el.sbVolLabel.textContent = `${v}%`;
+
+  ensureSoundboardState(state);
+
+  if (soundboardReady && soundboardPlayer) {
+    try { soundboardPlayer.setVolume(v); } catch {}
+  }
+  if (el.soundboardLocalPlayer) {
+    try { el.soundboardLocalPlayer.volume = v / 100; } catch {}
+  }
+}
+
+function sbOnStateChange(event) {
+  if (!soundboardPlayer || !window.YT) return;
+
+  if (event.data === YT.PlayerState.ENDED) {
+    try { soundboardPlayer.stopVideo(); } catch {}
+    el.sbNow.textContent = "Aus";
+  }
+}
+
+function setSoundboardPlayerMode(mode) {
+  activeSoundboardPlayer = mode;
+
+  const ytNode = document.getElementById("soundboardPlayer");
+  if (ytNode) ytNode.style.display = mode === "youtube" ? "block" : "none";
+
+  const local = el.soundboardLocalPlayer;
+  if (local) local.style.display = mode === "local" ? "block" : "none";
+
+  if (mode === "local") {
+    try { soundboardPlayer?.stopVideo?.(); } catch {}
+  } else {
+    try {
+      if (local) {
+        local.pause();
+        local.removeAttribute("src");
+        local.load();
+      }
+    } catch {}
+  }
+}
+
+function clearSoundboardEndTimer() {
+  clearInterval(soundboardEndTimer);
+  soundboardEndTimer = null;
+}
+
+function renderSoundboard() {
+  ensureSoundboardState(state);
+
+  el.sbConfigureBtn.disabled = !IS_HOST;
+  el.sbConfigureBtn.textContent = soundboardConfigMode
+    ? "Konfiguration beenden"
+    : "Configure Soundboard";
+
+  el.sbAddCategoryBtn.style.display =
+    IS_HOST && soundboardConfigMode ? "" : "none";
+
+  el.sbCategories.innerHTML = "";
+
+  if (!state.soundboard.categories.length) {
+    el.sbCategories.innerHTML = `<div class="hint">Noch keine Soundboard-Kategorien.</div>`;
+    return;
+  }
+
+  for (const cat of state.soundboard.categories) {
+    const details = document.createElement("details");
+    details.className = "sbCat";
+    details.open = cat.open !== false;
+
+    details.addEventListener("toggle", () => {
+      cat.open = details.open;
+      if (IS_HOST) saveState();
+      else cacheState();
+    });
+
+    const summary = document.createElement("summary");
+
+    const summaryWrap = document.createElement("span");
+    summaryWrap.className = "sbCatSummary";
+
+    const name = document.createElement("span");
+    name.textContent = cat.name || "Kategorie";
+    summaryWrap.appendChild(name);
+
+    if (IS_HOST && soundboardConfigMode) {
+      const actions = document.createElement("span");
+      actions.className = "sbCatActions";
+
+      const addBtn = document.createElement("button");
+      addBtn.textContent = "+ Sound";
+      addBtn.addEventListener("click", async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        await sbAddSound(cat);
+      });
+
+      const renBtn = document.createElement("button");
+      renBtn.textContent = "Umbenennen";
+      renBtn.addEventListener("click", async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        await sbRenameCategory(cat);
+      });
+
+      const delBtn = document.createElement("button");
+      delBtn.textContent = "Löschen";
+      delBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        sbDeleteCategory(cat);
+      });
+
+      actions.appendChild(addBtn);
+      actions.appendChild(renBtn);
+      actions.appendChild(delBtn);
+      summaryWrap.appendChild(actions);
+    }
+
+    summary.appendChild(summaryWrap);
+    details.appendChild(summary);
+
+    const buttons = document.createElement("div");
+    buttons.className = "sbButtons";
+
+    if (!cat.items.length) {
+      const empty = document.createElement("div");
+      empty.className = "hint";
+      empty.textContent = soundboardConfigMode
+        ? "Noch keine Sounds. Nutze „+ Sound“."
+        : "Keine Sounds in dieser Kategorie.";
+      buttons.appendChild(empty);
+    }
+
+    for (const item of cat.items) {
+      const wrap = document.createElement("span");
+      wrap.className = "sbSoundWrap";
+
+      const btn = document.createElement("button");
+      btn.className = "sbSoundBtn";
+      btn.textContent = item.label || "Sound";
+      btn.title = item.trackId
+        ? `Track: ${displayTitle(state.tracks[item.trackId])}`
+        : (item.url || item.videoId || "");
+      btn.addEventListener("click", () => {
+        soundboardPlayItem(item, { broadcast: true });
+      });
+
+      wrap.appendChild(btn);
+
+      if (IS_HOST && soundboardConfigMode) {
+        const editBtn = document.createElement("button");
+        editBtn.className = "sbMiniBtn";
+        editBtn.textContent = "✎";
+        editBtn.title = "Sound bearbeiten";
+        editBtn.addEventListener("click", async () => {
+          await sbEditSound(item);
+        });
+
+        const delBtn = document.createElement("button");
+        delBtn.className = "sbMiniBtn";
+        delBtn.textContent = "✕";
+        delBtn.title = "Sound löschen";
+        delBtn.addEventListener("click", () => {
+          sbDeleteSound(cat, item);
+        });
+
+        wrap.appendChild(editBtn);
+        wrap.appendChild(delBtn);
+      }
+
+      buttons.appendChild(wrap);
+    }
+
+    details.appendChild(buttons);
+    el.sbCategories.appendChild(details);
+  }
+}
+
+function soundboardPlayItem(item, { broadcast = true } = {}) {
+  if (item.trackId) {
+    soundboardPlayTrackId(item.trackId, item.label || "Sound", { broadcast });
+    return;
+  }
+
+  const videoId = item.videoId || extractVideoId(item.url || "");
+
+  if (!videoId) {
+    setStatus("Soundboard-Sound hat keine gültige YouTube-Video-ID.");
+    return;
+  }
+
+  soundboardPlayByVideoId(videoId, item.label || "Sound", { broadcast });
+}
+
+function soundboardPlayByVideoId(videoId, label = "Sound", { broadcast = true } = {}) {
+  if (!soundboardReady || !soundboardPlayer) {
+    setStatus("Soundboard-Player ist noch nicht bereit.");
+    return;
+  }
+
+  el.sbNow.textContent = label;
+  clearSoundboardEndTimer();
+  setSoundboardPlayerMode("youtube");
+
+  try {
+    soundboardPlayer.loadVideoById(videoId);
+    sbApplyVolume();
+  } catch {
+    setStatus("Soundboard-Sound konnte nicht gestartet werden.");
+  }
+
+  if (broadcast) {
+    sendPlaybackCommand({
+      type: "soundboardPlay",
+      soundboardVideoId: videoId,
+      label
+    });
+  }
+}
+
+function soundboardPlayTrackId(trackId, label = "Sound", { broadcast = true } = {}) {
+  const t = state.tracks[trackId];
+  if (!t) {
+    setStatus("Soundboard-Track wurde nicht gefunden.");
+    return;
+  }
+
+  clearSoundboardEndTimer();
+  el.sbNow.textContent = label || displayTitle(t);
+
+  const startSec = trackStartSec(trackId);
+  const endSec = trackEndSec(trackId);
+
+  if (isLocalTrack(t)) {
+    const mediaUrl = trackMediaUrl(trackId);
+    if (!mediaUrl || !el.soundboardLocalPlayer) {
+      setStatus("Lokaler Soundboard-Track konnte nicht geladen werden.");
+      return;
+    }
+
+    setSoundboardPlayerMode("local");
+    el.soundboardLocalPlayer.src = mediaUrl;
+    el.soundboardLocalPlayer.onloadedmetadata = () => {
+      try { el.soundboardLocalPlayer.currentTime = startSec; } catch {}
+    };
+    sbApplyVolume();
+    el.soundboardLocalPlayer.play().catch(() => {
+      setStatus("Soundboard-Track ist geladen. Falls der Browser Autoplay blockiert, bitte den Sound erneut drÃ¼cken.");
+    });
+  } else {
+    if (!soundboardReady || !soundboardPlayer) {
+      setStatus("Soundboard-Player ist noch nicht bereit.");
+      return;
+    }
+
+    setSoundboardPlayerMode("youtube");
+    try {
+      if (startSec > 0 || endSec) {
+        const payload = { videoId: trackVideoId(trackId), startSeconds: startSec };
+        if (endSec) payload.endSeconds = endSec;
+        soundboardPlayer.loadVideoById(payload);
+      } else {
+        soundboardPlayer.loadVideoById(trackVideoId(trackId));
+      }
+      sbApplyVolume();
+    } catch {
+      setStatus("Soundboard-Track konnte nicht gestartet werden.");
+    }
+  }
+
+  if (endSec) {
+    soundboardEndTimer = setInterval(() => {
+      try {
+        const currentTime = activeSoundboardPlayer === "local"
+          ? el.soundboardLocalPlayer.currentTime
+          : soundboardPlayer?.getCurrentTime?.();
+        if (currentTime >= endSec - 0.15) {
+          soundboardStop({ broadcast: false });
+        }
+      } catch {}
+    }, 500);
+  }
+
+  if (broadcast) {
+    sendPlaybackCommand({
+      type: "soundboardPlay",
+      soundboardTrackId: trackId,
+      label
+    });
+  }
+}
+
+function soundboardStop({ broadcast = true } = {}) {
+  clearSoundboardEndTimer();
+  if (soundboardPlayer) {
+    try { soundboardPlayer.stopVideo(); } catch {}
+  }
+  try {
+    el.soundboardLocalPlayer?.pause?.();
+    if (el.soundboardLocalPlayer) el.soundboardLocalPlayer.currentTime = 0;
+  } catch {}
+
+  el.sbNow.textContent = "Aus";
+
+  if (broadcast) {
+    sendPlaybackCommand({
+      type: "soundboardStop"
+    });
+  }
+}
+
+function soundboardFolderOptions() {
+  const opts = [
+    { value: "__NONE__", label: "(kein Ordner)" }
+  ];
+
+  for (const f of state.folders.slice().sort((a, b) => (a.name || "").localeCompare((b.name || ""), "de"))) {
+    opts.push({ value: f.id, label: f.name || "(ohne Name)" });
+  }
+
+  return opts;
+}
+
+function soundboardPlaylistsForFolder(folderId) {
+  return state.playlists
+    .filter(pl => pl.id !== DEFAULT_PLAYLIST_ID)
+    .filter(pl => {
+      const folderIds = Array.isArray(pl.folderIds) ? pl.folderIds : [];
+      return folderId === "__NONE__"
+        ? folderIds.length === 0
+        : folderIds.includes(folderId);
+    })
+    .filter(pl => (pl.trackIds || []).some(id => state.tracks[id]))
+    .slice()
+    .sort((a, b) => (a.name || "").localeCompare((b.name || ""), "de", { numeric: true, sensitivity: "base" }));
+}
+
+function soundboardTrackOptionsForPlaylist(playlistId) {
+  const pl = getPlaylistById(playlistId);
+  if (!pl || !Array.isArray(pl.trackIds)) return [];
+
+  return pl.trackIds
+    .filter(id => state.tracks[id])
+    .map(id => {
+      const t = state.tracks[id];
+      const source = isLocalTrack(t) ? "Lokal" : "YT";
+      return {
+        value: id,
+        label: `${displayTitle(t)} (${source})`
+      };
+    });
+}
+
+async function promptSoundboardTrackId(initialTrackId = null) {
+  const initialPlaylist = state.playlists.find(pl => (pl.trackIds || []).includes(initialTrackId));
+  const initialFolder = initialPlaylist?.folderIds?.[0] || "__NONE__";
+
+  const folderId = await promptSelect(
+    "Sound-Track wÃ¤hlen",
+    "Ordner:",
+    soundboardFolderOptions(),
+    initialFolder
+  );
+  if (folderId === null) return null;
+
+  const playlists = soundboardPlaylistsForFolder(folderId);
+  if (!playlists.length) {
+    setStatus("In diesem Ordner gibt es keine Playlists mit Tracks.");
+    return null;
+  }
+
+  const playlistId = await promptSelect(
+    "Sound-Track wÃ¤hlen",
+    "Playlist:",
+    playlists.map(pl => ({ value: pl.id, label: pl.name || "(ohne Name)" })),
+    initialPlaylist && playlists.some(pl => pl.id === initialPlaylist.id) ? initialPlaylist.id : playlists[0].id
+  );
+  if (playlistId === null) return null;
+
+  const tracks = soundboardTrackOptionsForPlaylist(playlistId);
+  if (!tracks.length) {
+    setStatus("Diese Playlist enthÃ¤lt keine Tracks.");
+    return null;
+  }
+
+  return await promptSelect(
+    "Sound-Track wÃ¤hlen",
+    "Track:",
+    tracks,
+    tracks.some(t => t.value === initialTrackId) ? initialTrackId : tracks[0].value
+  );
+}
+
+async function promptSoundboardSource(initial = "youtube") {
+  return await promptSelect(
+    "Sound-Quelle",
+    "Quelle wÃ¤hlen:",
+    [
+      { value: "youtube", label: "YouTube-Link" },
+      { value: "track", label: "Track aus Playlist" }
+    ],
+    initial
+  );
+}
+
+async function sbAddCategory() {
+  if (!IS_HOST) return;
+
+  const name = await promptText("Neue Soundboard-Kategorie", "Name:", "Neue Kategorie");
+  if (name === null) return;
+
+  const clean = String(name).trim();
+  if (!clean) return;
+
+  ensureSoundboardState(state);
+
+  state.soundboard.categories.push({
+    id: makeId("sbcat"),
+    name: clean,
+    open: true,
+    items: []
+  });
+
+  saveState();
+  renderSoundboard();
+}
+
+async function sbRenameCategory(cat) {
+  if (!IS_HOST) return;
+
+  const name = await promptText("Kategorie umbenennen", "Neuer Name:", cat.name || "");
+  if (name === null) return;
+
+  const clean = String(name).trim();
+  if (!clean) return;
+
+  cat.name = clean;
+  saveState();
+  renderSoundboard();
+}
+
+function sbDeleteCategory(cat) {
+  if (!IS_HOST) return;
+
+  if (!confirm(`Kategorie „${cat.name}“ wirklich löschen?\nAlle Sounds darin werden entfernt.`)) return;
+
+  state.soundboard.categories =
+    state.soundboard.categories.filter(c => c.id !== cat.id);
+
+  saveState();
+  renderSoundboard();
+}
+
+async function sbAddSound(cat) {
+  if (!IS_HOST) return;
+
+  const label = await promptText("Neuer Sound", "Button-Text:", "Miau");
+  if (label === null) return;
+
+  const cleanLabel = String(label).trim();
+  if (!cleanLabel) return;
+
+  const source = await promptSoundboardSource("youtube");
+  if (source === null) return;
+
+  if (source === "track") {
+    const trackId = await promptSoundboardTrackId();
+    if (!trackId) return;
+
+    cat.items.push({
+      id: makeId("sbi"),
+      label: cleanLabel,
+      trackId
+    });
+
+    saveState();
+    renderSoundboard();
+    return;
+  }
+
+  const url = await promptText("Neuer Sound", "YouTube-Link:", "");
+  if (url === null) return;
+
+  const cleanUrl = String(url).trim();
+  const videoId = extractVideoId(cleanUrl);
+
+  if (!videoId) {
+    setStatus("Konnte aus diesem Link keine YouTube-Video-ID erkennen.");
+    return;
+  }
+
+  cat.items.push({
+    id: makeId("sbi"),
+    label: cleanLabel,
+    url: cleanUrl,
+    videoId
+  });
+
+  saveState();
+  renderSoundboard();
+}
+
+async function sbEditSound(item) {
+  if (!IS_HOST) return;
+
+  const label = await promptText("Sound bearbeiten", "Button-Text:", item.label || "");
+  if (label === null) return;
+
+  const cleanLabel = String(label).trim();
+  if (!cleanLabel) return;
+
+  const source = await promptSoundboardSource(item.trackId ? "track" : "youtube");
+  if (source === null) return;
+
+  if (source === "track") {
+    const trackId = await promptSoundboardTrackId(item.trackId || null);
+    if (!trackId) return;
+
+    item.label = cleanLabel;
+    item.trackId = trackId;
+    delete item.url;
+    delete item.videoId;
+
+    saveState();
+    renderSoundboard();
+    return;
+  }
+
+  const url = await promptText("Sound bearbeiten", "YouTube-Link:", item.url || `https://www.youtube.com/watch?v=${item.videoId || ""}`);
+  if (url === null) return;
+
+  const cleanUrl = String(url).trim();
+  const videoId = extractVideoId(cleanUrl);
+
+  if (!videoId) {
+    setStatus("Konnte aus diesem Link keine YouTube-Video-ID erkennen.");
+    return;
+  }
+
+  item.label = cleanLabel;
+  item.url = cleanUrl;
+  item.videoId = videoId;
+  delete item.trackId;
+
+  saveState();
+  renderSoundboard();
+}
+
+function sbDeleteSound(cat, item) {
+  if (!IS_HOST) return;
+
+  if (!confirm(`Sound „${item.label}“ wirklich löschen?`)) return;
+
+  cat.items = cat.items.filter(i => i.id !== item.id);
+
+  saveState();
+  renderSoundboard();
+}
+
+  // -----------------------------
+  // Add tracks / import playlist
+  // -----------------------------
+  async function addSingleFromUrl(url) {
+    const videoId = extractVideoId(url);
+    if (!videoId) {
+      setStatus("Konnte aus diesem Link keine Video-ID erkennen. Für Playlists nutze bitte „Playlist importieren“.");
+      return;
+    }
+
+    let originalTitle = "(Titel wird geladen …)";
+    let thumbnailUrl = makeThumbUrl(videoId);
+
+    try {
+      const o = await fetchOEmbed(url);
+      if (o?.title) originalTitle = o.title;
+      if (o?.thumbnail_url) thumbnailUrl = o.thumbnail_url;
+    } catch {
+      originalTitle = "(Titel nicht verfügbar)";
+    }
+
+    upsertTrack({
+      videoId,
+      source: "youtube",
+      url,
+      originalTitle,
+      thumbnailUrl,
+      durationSec: state.tracks[videoId]?.durationSec || 0
+    });
+
+    ensureTrackInPlaylist(videoId, selectedPlaylistIdForAdding(), "end");
+    renderList();
+    renderMgrIfOpen();
+  }
+
+  async function guestImportAndPlay(url) {
+    if (!socket?.connected) {
+      setStatus("Keine Serververbindung. Gast-Import nicht möglich.");
+      return;
+    }
+
+    setStatus("Sende YouTube-Link an Host/Server…");
+    socket.emit("library:guestImportUrl", { url, playNow: true }, (res) => {
+      if (!res?.ok) {
+        setStatus(`Import fehlgeschlagen: ${escapeHtml(res?.error || "Unbekannter Fehler")}`);
+        return;
+      }
+      el.ytUrl.value = "";
+      setStatus("Track wurde in „OtherImports“ eingefügt und gestartet.");
+    });
+  }
+
+  function localFileDuration(file) {
+    return new Promise(resolve => {
+      const url = URL.createObjectURL(file);
+      const media = document.createElement(file.type.startsWith("video/") ? "video" : "audio");
+      media.preload = "metadata";
+      media.onloadedmetadata = () => {
+        const duration = Number.isFinite(media.duration) ? Math.floor(media.duration) : 0;
+        URL.revokeObjectURL(url);
+        resolve(duration);
+      };
+      media.onerror = () => {
+        URL.revokeObjectURL(url);
+        resolve(0);
+      };
+      media.src = url;
+    });
+  }
+
+  async function addLocalFile(file) {
+    if (!IS_HOST || !file) return;
+
+    const allowed = ["audio/mpeg", "audio/mp3", "audio/wav", "audio/x-wav", "audio/wave", "video/mp4"];
+    const lowerName = String(file.name || "").toLowerCase();
+    const allowedExt = lowerName.endsWith(".mp3") || lowerName.endsWith(".mp4") || lowerName.endsWith(".wav");
+    if (!allowed.includes(file.type) && !allowedExt) {
+      setStatus("Nur MP3, MP4 und WAV werden unterstÃ¼tzt.");
+      return;
+    }
+
+    setStatus(`Lade lokale Datei hoch: <b>${escapeHtml(file.name)}</b> â€¦`);
+    const durationSec = await localFileDuration(file);
+    const res = await fetch("/api/local-media", {
+      method: "POST",
+      headers: {
+        "content-type": file.type || "application/octet-stream",
+        "x-file-name": encodeURIComponent(file.name || "local-media"),
+        "x-media-folder": encodeURIComponent(selectedPlaylistNameForAdding())
+      },
+      body: file
+    });
+
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data?.track) {
+      if (res.status === 404) {
+        throw new Error("Upload-Route nicht gefunden. Bitte den Node-Server neu starten.");
+      }
+      throw new Error(data?.error || `Upload fehlgeschlagen (${res.status}).`);
+    }
+
+    const track = {
+      ...data.track,
+      durationSec: durationSec || data.track.durationSec || 0
+    };
+
+    upsertTrack(track);
+    ensureTrackInPlaylist(trackIdFor(track), selectedPlaylistIdForAdding(), "end");
+    renderList();
+    renderMgrIfOpen();
+    setStatus(`Lokale Datei hinzugefÃ¼gt: <b>${escapeHtml(displayTitle(track))}</b>.`);
+  }
+
+  function isSupportedLocalMediaFile(file) {
+    const allowed = ["audio/mpeg", "audio/mp3", "audio/wav", "audio/x-wav", "audio/wave", "video/mp4"];
+    const lowerName = String(file?.name || "").toLowerCase();
+    const allowedExt = lowerName.endsWith(".mp3") || lowerName.endsWith(".mp4") || lowerName.endsWith(".wav");
+    return allowed.includes(file?.type) || allowedExt;
+  }
+
+  async function uploadLocalFileAsTrack(file, mediaFolderName = "Lokale Medien") {
+    if (!isSupportedLocalMediaFile(file)) {
+      throw new Error("Nur MP3, MP4 und WAV werden unterstuetzt.");
+    }
+
+    setStatus(`Lade lokale Datei hoch: <b>${escapeHtml(file.name)}</b> ...`);
+    const durationSec = await localFileDuration(file);
+    const res = await fetch("/api/local-media", {
+      method: "POST",
+      headers: {
+        "content-type": file.type || "application/octet-stream",
+        "x-file-name": encodeURIComponent(file.name || "local-media"),
+        "x-media-folder": encodeURIComponent(mediaFolderName || "Lokale Medien")
+      },
+      body: file
+    });
+
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data?.track) {
+      if (res.status === 404) {
+        throw new Error("Upload-Route nicht gefunden. Bitte den Node-Server neu starten.");
+      }
+      throw new Error(data?.error || `Upload fehlgeschlagen (${res.status}).`);
+    }
+
+    return {
+      ...data.track,
+      durationSec: durationSec || data.track.durationSec || 0
+    };
+  }
+
+  function localFolderNameFromFiles(files) {
+    const first = files.find(f => f.webkitRelativePath) || files[0];
+    const rel = first?.webkitRelativePath || first?.name || "";
+    const firstPart = rel.split("/").filter(Boolean)[0];
+    return firstPart || `Lokaler Import ${nowIsoShort()}`;
+  }
+
+  async function importLocalFolder(filesLike) {
+    if (!IS_HOST) return;
+
+    const files = Array.from(filesLike || [])
+      .filter(isSupportedLocalMediaFile)
+      .sort((a, b) => {
+        const ap = a.webkitRelativePath || a.name || "";
+        const bp = b.webkitRelativePath || b.name || "";
+        return ap.localeCompare(bp, "de", { numeric: true, sensitivity: "base" });
+      });
+
+    if (!files.length) {
+      setStatus("In diesem Ordner wurden keine MP3-, MP4- oder WAV-Dateien gefunden.");
+      return;
+    }
+
+    const playlistName = localFolderNameFromFiles(files);
+    const newPlId = makeId("pl");
+    const importedTrackIds = [];
+
+    state.playlists.push({
+      id: newPlId,
+      name: playlistName,
+      trackIds: importedTrackIds,
+      folderIds: [],
+      source: { type: "localFolder", name: playlistName }
+    });
+    state.ui.selectedFolderId = "__NONE__";
+    state.ui.selectedPlaylistId = newPlId;
+    renderList();
+    renderMgrIfOpen();
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      setStatus(`Importiere lokalen Ordner: <b>${i + 1}</b>/<b>${files.length}</b> ${escapeHtml(file.webkitRelativePath || file.name)}`);
+      const track = await uploadLocalFileAsTrack(file, playlistName);
+      const trackId = trackIdFor(track);
+      state.tracks[trackId] = {
+        ...(state.tracks[trackId] || {}),
+        ...track,
+        customTitle: state.tracks[trackId]?.customTitle ?? track.customTitle ?? "",
+        addedAt: state.tracks[trackId]?.addedAt || Date.now(),
+        updatedAt: Date.now()
+      };
+      importedTrackIds.push(trackId);
+
+      if (i % 5 === 0 || i === files.length - 1) {
+        await saveState({ immediate: i === files.length - 1 });
+        renderList();
+        renderMgrIfOpen();
+      }
+    }
+
+    await saveState({ immediate: true });
+    renderList();
+    renderMgrIfOpen();
+    setStatus(`Lokaler Ordner importiert: <b>${importedTrackIds.length}</b> Track(s) in "${escapeHtml(playlistName)}".`);
+  }
+
+  async function importChapterPlaylistByUrl(url) {
+    if (!IS_HOST) {
+      setStatus("Nur der Host kann Kapitel-Playlists importieren.");
+      return;
+    }
+
+    const videoId = extractVideoId(url);
+    if (!videoId) {
+      setStatus("Konnte aus diesem Link keine Video-ID erkennen.");
+      return;
+    }
+
+    setStatus("Lese YouTube-Kapitel...");
+
+    let data;
+    try {
+      data = await fetchYouTubeChapters(url);
+    } catch (err) {
+      setStatus(`Kapitel-Import fehlgeschlagen: ${escapeHtml(err?.message || "Unbekannter Fehler")}`);
+      return;
+    }
+
+    const chapters = Array.isArray(data.chapters) ? data.chapters : [];
+    if (chapters.length < 2) {
+      setStatus("Keine YouTube-Kapitel gefunden. Das Video braucht sichtbare Kapitel/Timestamps.");
+      return;
+    }
+
+    const playlistName = `${data.title || "Kapitel-Import"} (Kapitel)`;
+    const newPlId = makeId("pl");
+    const playlistTrackIds = [];
+    const now = Date.now();
+
+    for (let i = 0; i < chapters.length; i++) {
+      const chapter = chapters[i];
+      const startSec = Math.max(0, Math.floor(Number(chapter.startSec || 0)));
+      const nextStart = chapters[i + 1] ? Math.floor(Number(chapters[i + 1].startSec || 0)) : null;
+      const endSec = Number.isFinite(nextStart) && nextStart > startSec
+        ? nextStart
+        : (Number.isFinite(Number(data.durationSec)) && Number(data.durationSec) > startSec ? Math.floor(Number(data.durationSec)) : null);
+      const segmentId = `seg_${videoId}_${startSec}`;
+      const durationSec = endSec ? Math.max(0, endSec - startSec) : 0;
+      const title = String(chapter.title || `Kapitel ${i + 1}`).trim() || `Kapitel ${i + 1}`;
+
+      state.tracks[segmentId] = {
+        ...(state.tracks[segmentId] || {}),
+        id: segmentId,
+        videoId,
+        source: "youtubeChapter",
+        url: `https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}&t=${startSec}s`,
+        originalTitle: title,
+        customTitle: state.tracks[segmentId]?.customTitle || "",
+        thumbnailUrl: data.thumbnailUrl || makeThumbUrl(videoId),
+        startSec,
+        endSec,
+        durationSec,
+        parentTitle: data.title || "",
+        addedAt: state.tracks[segmentId]?.addedAt || now,
+        updatedAt: now
+      };
+
+      playlistTrackIds.push(segmentId);
+    }
+
+    state.playlists.push({
+      id: newPlId,
+      name: playlistName,
+      trackIds: playlistTrackIds,
+      folderIds: [],
+      source: { type: "youtubeChapters", videoId, url }
+    });
+
+    state.ui.selectedFolderId = "__NONE__";
+    state.ui.selectedPlaylistId = newPlId;
+    await saveState({ immediate: true });
+    renderList();
+    renderMgrIfOpen();
+    setStatus(`Kapitel-Playlist importiert: <b>${playlistTrackIds.length}</b> Kapitel in "${escapeHtml(playlistName)}".`);
+  }
+
+  async function importPlaylistByUrl(url) {
+    if (!IS_HOST) {
+      setStatus("Nur der Host kann ganze Playlists importieren.");
+      return;
+    }
+
+    if (typeof YT === "undefined" || typeof YT.Player !== "function") {
+      setStatus("YouTube Player API ist noch nicht bereit. Bitte kurz warten und erneut importieren.");
+      return;
+    }
+
+    const playlistId = extractPlaylistId(url);
+    if (!playlistId) {
+      setStatus("Konnte aus dem Link keine Playlist-ID erkennen (Parameter 'list=' fehlt).");
+      return;
+    }
+
+    importingPlaylist = true;
+    clearTimeout(savePushTimer);
+
+    let playlistName = `Import ${nowIsoShort()} (${playlistId})`;
+    try {
+      const o = await fetchOEmbed(`https://www.youtube.com/playlist?list=${encodeURIComponent(playlistId)}`);
+      if (o?.title) playlistName = o.title;
+    } catch {}
+
+    const newPlId = makeId("pl");
+    state.playlists.push({
+      id: newPlId,
+      name: playlistName,
+      trackIds: [],
+      folderIds: [],
+      source: { type: "youtube", playlistId }
+    });
+    state.ui.selectedFolderId = "__NONE__";
+    state.ui.selectedPlaylistId = newPlId;
+    renderList();
+    renderMgrIfOpen();
+
+    setStatus(`Lese YouTube-Playlist… (${playlistId})`);
+
+    let ids = [];
+    try {
+      ids = await readYoutubePlaylistIds(playlistId);
+    } catch (err) {
+      importingPlaylist = false;
+      setStatus(`Konnte Playlist-Inhalt nicht auslesen: ${escapeHtml(err?.message || "Unbekannter Fehler")}`);
+      return;
+    }
+
+    if (!ids.length) {
+      importingPlaylist = false;
+      setStatus("Konnte Playlist-Inhalt nicht auslesen. Mögliche Gründe: Playlist privat/nicht einbettbar oder YouTube liefert keine IDs.");
+      return;
+    }
+
+    const toImport = [...new Set(ids.map(id => String(id || "").trim()).filter(Boolean))]
+      .slice(0, OEMBED_MAX_PER_IMPORT);
+
+    const importedPlaylist = getPlaylistById(newPlId);
+    if (!importedPlaylist) {
+      importingPlaylist = false;
+      setStatus("Import abgebrochen: Die neue Playlist wurde während des Imports nicht gefunden.");
+      return;
+    }
+
+    importedPlaylist.trackIds = [];
+
+    for (const vid of toImport) {
+      const videoUrl = `https://www.youtube.com/watch?v=${encodeURIComponent(vid)}&list=${encodeURIComponent(playlistId)}`;
+      const existing = state.tracks[vid];
+      state.tracks[vid] = {
+        ...(existing || {}),
+        videoId: vid,
+        source: "youtube",
+        url: videoUrl,
+        originalTitle: state.tracks[vid]?.originalTitle || "(Titel wird geladen …)",
+        thumbnailUrl: state.tracks[vid]?.thumbnailUrl || makeThumbUrl(vid),
+        durationSec: existing?.durationSec || 0,
+        addedAt: existing?.addedAt || Date.now(),
+        updatedAt: Date.now()
+      };
+      importedPlaylist.trackIds.push(vid);
+    }
+
+    state.ui.selectedFolderId = "__NONE__";
+    state.ui.selectedPlaylistId = newPlId;
+    await saveState({ immediate: true });
+    renderList();
+    setStatus(`Importiert: <b>${toImport.length}</b> Tracks. Lade Titel/Thumbnails…`);
+
+    let done = 0;
+    for (let i = 0; i < toImport.length; i += OEMBED_CONCURRENCY) {
+      const batch = toImport.slice(i, i + OEMBED_CONCURRENCY);
+      await Promise.all(batch.map(vid => loadMetadataForTrack(vid)));
+
+      done += batch.length;
+      cacheState();
+      if (done % OEMBED_BATCH_RENDER_EVERY === 0 || done >= toImport.length) {
+        setStatus(`Metadaten: <b>${done}/${toImport.length}</b>â€¦`);
+        renderList();
+      }
+    }
+
+    await saveState({ immediate: true });
+    importingPlaylist = false;
+    renderList();
+    renderMgrIfOpen();
+    setStatus(`Playlist-Import abgeschlossen: <b>${toImport.length}</b> Tracks in â€ž${escapeHtml(playlistName)}â€œ.`);
+  }
+
+  /*
+    for (const vid of toImport) {
+      const t = state.tracks[vid];
+      if (!t) continue;
+
+      const needsTitle = !t.originalTitle || t.originalTitle.startsWith("(Titel");
+      const needsThumb = !t.thumbnailUrl;
+
+      if (needsTitle || needsThumb) {
+        try {
+          const o = await fetchOEmbed(t.url || `https://www.youtube.com/watch?v=${encodeURIComponent(vid)}`);
+          if (o?.title) t.originalTitle = o.title;
+          if (o?.thumbnail_url) t.thumbnailUrl = o.thumbnail_url;
+          t.updatedAt = Date.now();
+          cacheState();
+        } catch {
+          if (!t.originalTitle || t.originalTitle.startsWith("(Titel")) t.originalTitle = "(Titel nicht verfügbar)";
+          if (!t.thumbnailUrl) t.thumbnailUrl = makeThumbUrl(vid);
+          cacheState();
+        }
+      }
+
+      done++;
+      if (done % OEMBED_BATCH_RENDER_EVERY === 0) {
+        setStatus(`Metadaten: <b>${done}/${toImport.length}</b>…`);
+        renderList();
+      }
+    }
+    */
+
+  /*
+    await saveState({ immediate: true });
+    importingPlaylist = false;
+    renderList();
+    renderMgrIfOpen();
+    setStatus(`Playlist-Import abgeschlossen: <b>${toImport.length}</b> Tracks in „${escapeHtml(playlistName)}“.`);
+  }
+  */
+
+  // -----------------------------
+  // Playlist management
+  // -----------------------------
+  async function createPlaylist() {
+    if (!IS_HOST) return;
+    const name = await promptText("Neue Playlist", "Name der Playlist:", "Neue Playlist");
+    if (name === null) return;
+    const clean = String(name).trim();
+    if (!clean) { setStatus("Abgebrochen: Name ist leer."); return; }
+
+    const id = makeId("pl");
+    const folderSel = state.ui.selectedFolderId || "__ALL__";
+    const folderIds = folderSel !== "__ALL__" && folderSel !== "__NONE__" ? [folderSel] : [];
+
+    state.playlists.push({ id, name: clean, trackIds: [], folderIds });
+    if (folderSel === "__ALL__") state.ui.selectedFolderId = "__NONE__";
+    state.ui.selectedPlaylistId = id;
+    saveState();
+    renderList();
+    renderMgrIfOpen();
+  }
+
+  async function renameSelectedPlaylist() {
+    if (!IS_HOST || isAllViewSelected()) return;
+    const pl = getPlaylistById(state.ui.selectedPlaylistId);
+    if (!pl) return;
+    const name = await promptText("Playlist umbenennen", "Neuer Name:", pl.name || "");
+    if (name === null) return;
+    const clean = String(name).trim();
+    if (!clean) { setStatus("Abgebrochen: Name ist leer."); return; }
+    pl.name = clean;
+    saveState();
+    renderList();
+    renderMgrIfOpen();
+  }
+
+  async function deleteSelectedPlaylist() {
+    if (!IS_HOST || isAllViewSelected()) return;
+    if (state.ui.selectedPlaylistId === DEFAULT_PLAYLIST_ID || state.ui.selectedPlaylistId === OTHER_IMPORTS_ID) {
+      setStatus("Diese System-Playlist kann nicht gelöscht werden.");
+      return;
+    }
+
+    const pl = getPlaylistById(state.ui.selectedPlaylistId);
+    if (!pl) return;
+    const trackCount = (pl.trackIds || []).length;
+
+    const choice = await promptSelect(
+      "Playlist löschen",
+      `Was soll passieren mit den ${trackCount} Track(s) in „${pl.name}“?`,
+      [
+        { value: "cancel", label: "Abbrechen" },
+        { value: "only", label: "Nur Playlist löschen (Songs bleiben erhalten)" },
+        { value: "wipe", label: "Playlist löschen + alle Songs überall löschen" },
+      ],
+      "only"
+    );
+
+    if (!choice || choice === "cancel") return;
+
+    if (choice === "wipe") {
+      if (!confirm(`Wirklich ALLE ${trackCount} Track(s) aus dieser Playlist überall löschen?\nDas entfernt sie aus der Bibliothek und aus allen Playlists.`)) return;
+      const n = deletePlaylistTracksEverywhere(pl.id);
+      setStatus(`Gelöscht: Playlist + ${n} Track(s) überall entfernt.`);
+    } else {
+      setStatus(`Playlist „${escapeHtml(pl.name)}“ gelöscht. Songs bleiben erhalten.`);
+    }
+
+    state.playlists = state.playlists.filter(p => p.id !== pl.id);
+    state.ui.selectedPlaylistId = ALL_VIEW_ID;
+    state.ui.selectedFolderId = "__ALL__";
+    saveState();
+    renderList();
+    renderLoopSection();
+    renderMgrIfOpen();
+    if (fxReady) fxRenderSelectors();
+  }
+
+  async function addSelectedPlaylistToFolder() {
+    if (!IS_HOST || isAllViewSelected()) return;
+
+    const pl = getPlaylistById(state.ui.selectedPlaylistId);
+    if (!pl) return;
+
+    const assigned = Array.isArray(pl.folderIds) ? pl.folderIds : [];
+    const available = state.folders
+      .filter(f => !assigned.includes(f.id))
+      .slice()
+      .sort((a,b) => (a.name || "").localeCompare((b.name || ""), "de"));
+
+    if (available.length === 0) {
+      setStatus("Diese Playlist ist bereits in allen Ordnern oder es gibt noch keine Ordner.");
+      return;
+    }
+
+    const options = available.map(f => ({ value: f.id, label: f.name || "(ohne Name)" }));
+    const chosen = await promptSelect("Playlist zu Ordner", "Ordner wählen:", options, options[0]?.value ?? null);
+    if (chosen === null) return;
+
+    const ok = addPlaylistToFolder(pl.id, chosen);
+    const folder = getFolderById(chosen);
+    setStatus(ok
+      ? `Playlist zu Ordner „${escapeHtml(folder?.name || "(ohne Name)")}" hinzugefügt.`
+      : "Playlist war bereits in diesem Ordner."
+    );
+    renderList();
+    renderMgrIfOpen();
+    if (fxReady) fxRenderSelectors();
+  }
+
+  // -----------------------------
+  // Playlist Manager
+  // -----------------------------
+  function renderMgrIfOpen() {
+    if (el.dlgMgr && el.dlgMgr.open) renderPlaylistManager();
+  }
+
+  function renderPlaylistManager() {
+    el.mgrFolders.innerHTML = "";
+    const folderSearch = (el.mgrFolderSearch?.value || "").trim().toLocaleLowerCase("de");
+    const playlistSearch = (el.mgrPlaylistSearch?.value || "").trim().toLocaleLowerCase("de");
+    const visibleFolders = state.folders.filter(f => {
+      const name = f.name || "(ohne Name)";
+      return !folderSearch || name.toLocaleLowerCase("de").includes(folderSearch);
+    });
+
+    if (state.folders.length === 0) {
+      el.mgrFolders.innerHTML = `<div class="hint" style="margin-top:10px;">Noch keine Ordner. Klicke „Neuer Ordner“.</div>`;
+    } else if (visibleFolders.length === 0) {
+      el.mgrFolders.innerHTML = `<div class="hint" style="margin-top:10px;">Keine Ordner gefunden.</div>`;
+    }
+
+    for (const f of visibleFolders) {
+      const row = document.createElement("div");
+      row.className = "mgrFolder";
+      row.dataset.folderId = f.id;
+
+      const left = document.createElement("div");
+      left.style.display = "flex";
+      left.style.flexDirection = "column";
+
+      const name = document.createElement("strong");
+      name.textContent = f.name || "(ohne Name)";
+
+      const count = document.createElement("span");
+      count.className = "muted";
+      const n = state.playlists.filter(p => (p.folderIds || []).includes(f.id)).length;
+      count.textContent = `${n} Playlist(s)`;
+
+      left.appendChild(name);
+      left.appendChild(count);
+
+      const actions = document.createElement("div");
+      actions.className = "mgrFolderActions";
+
+      const ren = document.createElement("button");
+      ren.textContent = "Umbenennen";
+      ren.disabled = !IS_HOST;
+      ren.addEventListener("click", async () => {
+        if (!IS_HOST) return;
+        const v = await promptText("Ordner umbenennen", "Neuer Name:", f.name || "");
+        if (v === null) return;
+        const clean = String(v).trim();
+        if (!clean) return;
+        f.name = clean;
+        saveState();
+        renderPlaylistManager();
+      });
+
+      const del = document.createElement("button");
+      del.textContent = "Löschen";
+      del.disabled = !IS_HOST;
+      del.addEventListener("click", () => {
+        if (!IS_HOST) return;
+        if (!confirm(`Ordner „${f.name}“ löschen?\nPlaylists bleiben erhalten (nur Zuordnung wird entfernt).`)) return;
+        deleteFolder(f.id);
+        renderPlaylistManager();
+      });
+
+      actions.appendChild(ren);
+      actions.appendChild(del);
+      row.appendChild(left);
+      row.appendChild(actions);
+
+      row.addEventListener("dragover", (e) => {
+        if (!IS_HOST) return;
+        e.preventDefault();
+        row.classList.add("dropTarget");
+      });
+      row.addEventListener("dragleave", () => row.classList.remove("dropTarget"));
+      row.addEventListener("drop", (e) => {
+        if (!IS_HOST) return;
+        e.preventDefault();
+        row.classList.remove("dropTarget");
+        const playlistId = e.dataTransfer.getData("text/playlistId");
+        if (!playlistId || playlistId === DEFAULT_PLAYLIST_ID) return;
+        const ok = addPlaylistToFolder(playlistId, f.id);
+        if (ok) setStatus(`Playlist in Ordner „${escapeHtml(f.name)}“ hinzugefügt.`);
+        renderPlaylistManager();
+      });
+
+      el.mgrFolders.appendChild(row);
+    }
+
+    el.mgrPlaylists.innerHTML = "";
+    const pls = state.playlists.filter(pl => {
+      const name = pl.name || "(ohne Name)";
+      return !playlistSearch || name.toLocaleLowerCase("de").includes(playlistSearch);
+    });
+    pls.sort((a,b) => {
+      if (a.id === DEFAULT_PLAYLIST_ID) return -1;
+      if (b.id === DEFAULT_PLAYLIST_ID) return 1;
+      if (a.id === OTHER_IMPORTS_ID) return -1;
+      if (b.id === OTHER_IMPORTS_ID) return 1;
+      return (a.name || "").localeCompare((b.name || ""), "de");
+    });
+
+    if (state.playlists.length > 0 && pls.length === 0) {
+      el.mgrPlaylists.innerHTML = `<div class="hint" style="margin-top:10px;">Keine Playlists gefunden.</div>`;
+    }
+
+    for (const pl of pls) {
+      const item = document.createElement("div");
+      item.className = "mgrPlaylistItem";
+      item.draggable = IS_HOST && pl.id !== DEFAULT_PLAYLIST_ID;
+      item.dataset.playlistId = pl.id;
+
+      item.addEventListener("dragstart", (e) => {
+        if (!IS_HOST) return;
+        e.dataTransfer.setData("text/playlistId", pl.id);
+        e.dataTransfer.effectAllowed = "copy";
+      });
+
+      const top = document.createElement("div");
+      top.className = "mgrPlaylistTop";
+
+      const name = document.createElement("div");
+      name.className = "mgrPlaylistName";
+      name.textContent = pl.name || "(ohne Name)";
+
+      const meta = document.createElement("div");
+      meta.className = "mgrPlaylistMeta";
+      meta.innerHTML = `<span class="tag">${(pl.trackIds||[]).length} Tracks</span>`;
+
+      top.appendChild(name);
+      top.appendChild(meta);
+
+      const chips = document.createElement("div");
+      chips.className = "chipRow";
+
+      const folderIds = Array.isArray(pl.folderIds) ? pl.folderIds : [];
+      if (folderIds.length === 0) {
+        const c = document.createElement("span");
+        c.className = "chip";
+        c.textContent = "(kein Ordner)";
+        chips.appendChild(c);
+      } else {
+        for (const fid of folderIds) {
+          const folder = getFolderById(fid);
+          if (!folder) continue;
+          const chip = document.createElement("span");
+          chip.className = "chip";
+          chip.textContent = folder.name;
+
+          if (IS_HOST) {
+            const x = document.createElement("button");
+            x.textContent = "✕";
+            x.title = "Aus diesem Ordner entfernen";
+            x.addEventListener("click", (e) => {
+              e.stopPropagation();
+              removePlaylistFromFolder(pl.id, fid);
+              renderPlaylistManager();
+            });
+            chip.appendChild(x);
+          }
+          chips.appendChild(chip);
+        }
+      }
+
+      if (IS_HOST && pl.id !== DEFAULT_PLAYLIST_ID) {
+        const addChip = document.createElement("span");
+        addChip.className = "chip chipAdd";
+        const plus = document.createElement("button");
+        plus.textContent = "+";
+        plus.title = "Zu Ordner hinzufügen";
+        plus.addEventListener("click", async (e) => {
+          e.stopPropagation();
+          const available = state.folders
+            .filter(f => !folderIds.includes(f.id))
+            .slice()
+            .sort((a,b) => (a.name||"").localeCompare((b.name||""), "de"));
+          if (available.length === 0) {
+            setStatus("Keine weiteren Ordner verfügbar (oder noch keine Ordner angelegt).");
+            return;
+          }
+          const options = available.map(f => ({ label: f.name || "(ohne Name)", value: f.id }));
+          const chosen = await promptSelect("Zu Ordner hinzufügen", "Ordner wählen:", options, options[0]?.value ?? null);
+          if (chosen === null) return;
+          const ok = addPlaylistToFolder(pl.id, chosen);
+          if (ok) {
+            const folder = getFolderById(chosen);
+            setStatus(`Playlist zu Ordner „${escapeHtml(folder?.name || "(ohne Name)")}“ hinzugefügt.`);
+          }
+          renderPlaylistManager();
+        });
+        addChip.appendChild(plus);
+        chips.appendChild(addChip);
+      }
+
+      item.appendChild(top);
+      item.appendChild(chips);
+      el.mgrPlaylists.appendChild(item);
+    }
+  }
+
+  // -----------------------------
+  // Role UI
+  // -----------------------------
+  function applyRoleUi() {
+    if (IS_HOST) {
+      el.roleHint.innerHTML = `
+        <b>Host-Modus aktiv.</b> Du kannst Bibliothek und Playlists bearbeiten. Server speichert automatisch in <b>data/library.json</b>.<br>
+        Gäste öffnen dieselbe Adresse ohne <b>?host=1</b>. Gast-Links landen in <b>OtherImports</b>.
+      `;
+      return;
+    }
+
+    el.roleHint.innerHTML = `
+      <b>Gast-Modus aktiv.</b> Du kannst Wiedergabe steuern und YouTube-Links hinzufügen. Neue Links landen in <b>OtherImports</b> und starten direkt.<br>
+      Playlist-Verwaltung, Löschen, Umbenennen und Import ganzer Playlists sind Host-only.
+    `;
+
+    el.importPlaylistBtn.disabled = true;
+    el.importPlaylistBtn.title = "Nur der Host kann ganze Playlists importieren.";
+    el.importChaptersBtn.disabled = true;
+    el.importChaptersBtn.title = "Nur der Host kann Kapitel-Playlists importieren.";
+    el.addLocalBtn.disabled = true;
+    el.addLocalBtn.title = "Nur der Host kann lokale Dateien hinzufÃ¼gen.";
+    el.importLocalFolderBtn.disabled = true;
+    el.importLocalFolderBtn.title = "Nur der Host kann lokale Ordner importieren.";
+    el.managePlaylistsBtn.disabled = false;
+    el.newPlaylistBtn.disabled = true;
+    el.renamePlaylistBtn.disabled = true;
+    el.deletePlaylistBtn.disabled = true;
+    el.addPlaylistToFolderBtn.disabled = true;
+    el.importBtn.disabled = true;
+  }
+
+  // -----------------------------
+  // UI Wiring
+  // -----------------------------
+  el.localMediaPlayer.addEventListener("ended", () => {
+    if (activeMainPlayer === "local") handleEnded();
+  });
+
+  el.localMediaPlayer.addEventListener("loadedmetadata", () => {
+    const t = currentVid ? state.tracks[currentVid] : null;
+    const dur = Math.floor(el.localMediaPlayer.duration || 0);
+    if (t && isLocalTrack(t) && Number.isFinite(dur) && dur > 0 && (!t.durationSec || t.durationSec <= 0)) {
+      t.durationSec = dur;
+      t.updatedAt = Date.now();
+      if (IS_HOST) saveState();
+      else cacheState();
+      renderList();
+      updateNowSub();
+    }
+  });
+
+  el.unlockPlaybackBtn.addEventListener("click", () => runPlaybackUnlock());
+
+  el.fxLocalMediaPlayer.addEventListener("play", () => {
+    if (activeFxPlayer !== "local") return;
+    fxPlaying = true;
+    fxUpdateButtons();
+  });
+
+  el.fxLocalMediaPlayer.addEventListener("pause", () => {
+    if (activeFxPlayer !== "local") return;
+    fxPlaying = false;
+    fxUpdateButtons();
+  });
+
+  el.addBtn.addEventListener("click", async () => {
+    const url = el.ytUrl.value.trim();
+    if (!url) return;
+
+    el.addBtn.disabled = true;
+    el.addLocalBtn.disabled = true;
+    el.importLocalFolderBtn.disabled = true;
+    el.importPlaylistBtn.disabled = true;
+    el.importChaptersBtn.disabled = true;
+
+    try {
+      if (!IS_HOST) {
+        await guestImportAndPlay(url);
+        return;
+      }
+      setStatus("Füge Track hinzu…");
+      await addSingleFromUrl(url);
+      el.ytUrl.value = "";
+    } finally {
+      el.addBtn.disabled = false;
+      el.addLocalBtn.disabled = !IS_HOST;
+      el.importLocalFolderBtn.disabled = !IS_HOST;
+      if (IS_HOST) {
+        el.importPlaylistBtn.disabled = false;
+        el.importChaptersBtn.disabled = false;
+      }
+    }
+  });
+
+  el.addLocalBtn.addEventListener("click", () => {
+    if (!IS_HOST) {
+      setStatus("Nur der Host kann lokale Dateien hinzufÃ¼gen.");
+      return;
+    }
+    el.localFileInput.click();
+  });
+
+  el.localFileInput.addEventListener("change", async () => {
+    const file = el.localFileInput.files?.[0];
+    el.localFileInput.value = "";
+    if (!file) return;
+
+    el.addBtn.disabled = true;
+    el.addLocalBtn.disabled = true;
+    el.importLocalFolderBtn.disabled = true;
+    el.importPlaylistBtn.disabled = true;
+    el.importChaptersBtn.disabled = true;
+    try {
+      await addLocalFile(file);
+    } catch (err) {
+      setStatus(`Lokale Datei konnte nicht hinzugefÃ¼gt werden: ${escapeHtml(err.message || "Unbekannter Fehler")}`);
+    } finally {
+      el.addBtn.disabled = false;
+      el.addLocalBtn.disabled = !IS_HOST;
+      el.importLocalFolderBtn.disabled = !IS_HOST;
+      if (IS_HOST) {
+        el.importPlaylistBtn.disabled = false;
+        el.importChaptersBtn.disabled = false;
+      }
+    }
+  });
+
+  el.importLocalFolderBtn.addEventListener("click", () => {
+    if (!IS_HOST) {
+      setStatus("Nur der Host kann lokale Ordner importieren.");
+      return;
+    }
+    el.localFolderInput.click();
+  });
+
+  el.localFolderInput.addEventListener("change", async () => {
+    const files = el.localFolderInput.files;
+    el.localFolderInput.value = "";
+    if (!files || files.length === 0) return;
+
+    el.addBtn.disabled = true;
+    el.addLocalBtn.disabled = true;
+    el.importLocalFolderBtn.disabled = true;
+    el.importPlaylistBtn.disabled = true;
+    el.importChaptersBtn.disabled = true;
+    try {
+      await importLocalFolder(files);
+    } catch (err) {
+      setStatus(`Lokaler Ordner konnte nicht importiert werden: ${escapeHtml(err.message || "Unbekannter Fehler")}`);
+    } finally {
+      el.addBtn.disabled = false;
+      el.addLocalBtn.disabled = !IS_HOST;
+      el.importLocalFolderBtn.disabled = !IS_HOST;
+      if (IS_HOST) {
+        el.importPlaylistBtn.disabled = false;
+        el.importChaptersBtn.disabled = false;
+      }
+    }
+  });
+
+  el.importPlaylistBtn.addEventListener("click", async () => {
+    if (!IS_HOST) return;
+    const url = el.ytUrl.value.trim();
+    if (!url) return;
+
+    el.addBtn.disabled = true;
+    el.addLocalBtn.disabled = true;
+    el.importLocalFolderBtn.disabled = true;
+    el.importPlaylistBtn.disabled = true;
+    el.importChaptersBtn.disabled = true;
+    try {
+      await importPlaylistByUrl(url);
+      el.ytUrl.value = "";
+    } finally {
+      el.addBtn.disabled = false;
+      el.addLocalBtn.disabled = false;
+      el.importLocalFolderBtn.disabled = false;
+      el.importPlaylistBtn.disabled = false;
+      el.importChaptersBtn.disabled = false;
+    }
+  });
+
+  el.importChaptersBtn.addEventListener("click", async () => {
+    if (!IS_HOST) return;
+    const url = el.ytUrl.value.trim();
+    if (!url) return;
+
+    el.addBtn.disabled = true;
+    el.addLocalBtn.disabled = true;
+    el.importLocalFolderBtn.disabled = true;
+    el.importPlaylistBtn.disabled = true;
+    el.importChaptersBtn.disabled = true;
+    try {
+      await importChapterPlaylistByUrl(url);
+      el.ytUrl.value = "";
+    } finally {
+      el.addBtn.disabled = false;
+      el.addLocalBtn.disabled = false;
+      el.importLocalFolderBtn.disabled = false;
+      el.importPlaylistBtn.disabled = false;
+      el.importChaptersBtn.disabled = false;
+    }
+  });
+
+  el.ytUrl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") el.addBtn.click();
+  });
+
+  el.folderSelect.addEventListener("change", () => {
+    state.ui.selectedFolderId = el.folderSelect.value;
+    if (el.playlistSelectSearch) el.playlistSelectSearch.value = "";
+    cacheState();
+    renderList();
+  });
+
+  el.playlistSelect.addEventListener("change", () => {
+    state.ui.selectedPlaylistId = el.playlistSelect.value;
+    cacheState();
+    renderList();
+  });
+  el.folderSelectSearch.addEventListener("input", () => renderPlaylistSelect());
+  el.playlistSelectSearch.addEventListener("input", () => renderPlaylistSelect());
+
+  el.managePlaylistsBtn.addEventListener("click", () => {
+    renderPlaylistManager();
+    el.dlgMgr.showModal();
+  });
+
+  el.mgrCloseBtn.addEventListener("click", () => el.dlgMgr.close());
+  el.dlgMgr.addEventListener("click", (e) => {
+    if (e.target === el.dlgMgr) el.dlgMgr.close();
+  });
+
+  el.mgrNewFolderBtn.addEventListener("click", async () => {
+    if (!IS_HOST) return;
+    const name = await promptText("Neuer Ordner", "Ordnername:", "Neuer Ordner");
+    if (name === null) return;
+    const clean = String(name).trim();
+    if (!clean) return;
+    state.folders.push({ id: makeId("fo"), name: clean });
+    saveState();
+    renderPlaylistManager();
+  });
+
+  el.mgrFolderSearch.addEventListener("input", () => renderPlaylistManager());
+  el.mgrPlaylistSearch.addEventListener("input", () => renderPlaylistManager());
+
+  el.newPlaylistBtn.addEventListener("click", createPlaylist);
+  el.renamePlaylistBtn.addEventListener("click", renameSelectedPlaylist);
+  el.deletePlaylistBtn.addEventListener("click", deleteSelectedPlaylist);
+  el.addPlaylistToFolderBtn.addEventListener("click", addSelectedPlaylistToFolder);
+  el.orderMode.addEventListener("change", () => renderList());
+
+  el.librarySearch.addEventListener("input", () => {
+    renderList();
+  });
+
+  el.playBtn.addEventListener("click", () => {
+    if (!isMainPlaybackReady()) return;
+
+    if (currentQueue.length === 0 && viewQueue.length > 0) {
+      currentQueue = [...viewQueue];
+      loopContextKey = isAllViewSelected() ? "all" : `playlist:${state.ui.selectedPlaylistId}`;
+      loadLoopSelectionForCurrentKey();
+      renderLoopSection();
+    }
+
+    if (!currentVid && currentQueue.length > 0) {
+      playIndex(0, { broadcast: true });
+      return;
+    }
+
+    resumeMainPlayback();
+    sendPlaybackCommand({ type: "resume", positionSec: getCurrentPositionSec() });
+  });
+
+  el.pauseBtn.addEventListener("click", () => {
+    if (!isMainPlaybackReady()) return;
+    pauseMainPlayback();
+    sendPlaybackCommand({ type: "pause", positionSec: getCurrentPositionSec() });
+  });
+
+  el.prevBtn.addEventListener("click", () => goPrev({ broadcast: true }));
+  el.nextBtn.addEventListener("click", () => goNext({ broadcast: true }));
+  el.stopBtn.addEventListener("click", () => stopPlaybackUI({ broadcast: true }));
+  el.setStartBtn.addEventListener("click", () => setCurrentCutPoint("start"));
+  el.setEndBtn.addEventListener("click", () => setCurrentCutPoint("end"));
+  el.setTagsBtn.addEventListener("click", () => setCurrentTags());
+
+  el.renameCurrentBtn.addEventListener("click", async () => {
+    if (!IS_HOST) return;
+    const vid = currentVideoId();
+    if (!vid) return;
+    const t = state.tracks[vid];
+    if (!t) return;
+    const v = await promptText("Interner Name", "Neuer Name (leer = YouTube-Titel verwenden):", t.customTitle || "");
+    if (v === null) return;
+    t.customTitle = String(v);
+    t.updatedAt = Date.now();
+    saveState();
+    renderList();
+    el.nowPlaying.textContent = displayTitle(t);
+    renderLoopSection();
+  });
+
+  el.deleteCurrentBtn.addEventListener("click", () => {
+    if (!IS_HOST) return;
+    const vid = currentVideoId();
+    if (!vid) return;
+    const t = state.tracks[vid];
+    const name = t ? displayTitle(t) : vid;
+    if (!confirm(`Track wirklich überall löschen?\n\n${name}`)) return;
+    deleteTrackEverywhere(vid);
+    stopPlaybackUI({ broadcast: true });
+    renderList();
+    renderLoopSection();
+    setStatus("Track gelöscht.");
+  });
+
+  el.loopMode.addEventListener("change", () => {
+    updateNowSub();
+    renderLoopSection();
+    sendPlaybackCommand({ type: "loopMode", value: el.loopMode.value });
+  });
+
+  el.shuffleMode.addEventListener("change", () => {
+    state.ui.shuffleEnabled = !!el.shuffleMode.checked;
+    if (IS_HOST) saveState();
+    else cacheState();
+    updateNowSub();
+    sendPlaybackCommand({ type: "shuffle", value: state.ui.shuffleEnabled });
+  });
+
+  el.loopAllBtn.addEventListener("click", () => {
+    loopSelected = new Set(currentQueue);
+    saveLoopSelectionForCurrentKey();
+    renderLoopSection();
+  });
+
+  el.loopNoneBtn.addEventListener("click", () => {
+    loopSelected = new Set();
+    saveLoopSelectionForCurrentKey();
+    renderLoopSection();
+  });
+
+  el.loopSearch.addEventListener("input", () => {
+    renderLoopSection();
+  });
+  el.setPlaylistTagsBtn.addEventListener("click", () => setCurrentPlaylistTags());
+
+el.fxFolderSelect.addEventListener("change", () => {
+  fxPlaylistId = null;
+  el.fxTrackSearch.value = "";
+  fxRenderPlaylistAndTracks();
+});
+
+el.fxPlaylistSelect.addEventListener("change", () => {
+  fxPlaylistId = el.fxPlaylistSelect.value;
+  el.fxTrackSearch.value = "";
+  fxRenderPlaylistAndTracks();
+});
+
+  el.fxTrackSelect.addEventListener("change", () => {
+    fxVid = el.fxTrackSelect.value;
+    const t = state.tracks[fxVid];
+    el.fxNow.textContent = t ? displayTitle(t) : fxVid;
+    fxUpdateButtons();
+  });
+  el.fxTrackSearch.addEventListener("input", () => {
+  fxRenderTrackSelect();
+});
+
+  el.fxPlayBtn.addEventListener("click", () => fxStart({ broadcast: true }));
+  el.fxStopBtn.addEventListener("click", () => fxStop({ broadcast: true }));
+  el.mainVol.addEventListener("input", () => {
+    mainApplyVolume();
+    saveLocalUiState({ mainVolume: Number(el.mainVol.value || 0) });
+  });
+  el.fxVol.addEventListener("input", () => {
+    fxApplyVolume();
+    saveLocalUiState({ fxVolume: Number(el.fxVol.value || 0) });
+  });
+  
+  el.sbVol.addEventListener("input", () => {
+  sbApplyVolume();
+  saveLocalUiState({ soundboardVolume: Number(el.sbVol.value || 0) });
+});
+
+el.sbEndSoundBtn.addEventListener("click", () => {
+  soundboardStop({ broadcast: true });
+});
+
+el.sbConfigureBtn.addEventListener("click", () => {
+  if (!IS_HOST) {
+    setStatus("Nur der Host kann das Soundboard konfigurieren.");
+    return;
+  }
+
+  soundboardConfigMode = !soundboardConfigMode;
+  renderSoundboard();
+});
+
+el.sbAddCategoryBtn.addEventListener("click", async () => {
+  await sbAddCategory();
+});
+
+  el.exportBtn.addEventListener("click", () => {
+    const payload = { version: 6, exportedAt: new Date().toISOString(), state };
+    el.jsonBox.value = JSON.stringify(payload, null, 2);
+    setStatus("Export erzeugt. Du kannst den JSON-Text kopieren und sichern.");
+  });
+
+  el.importBtn.addEventListener("click", () => {
+    if (!IS_HOST) {
+      setStatus("Nur der Host kann einen Import übernehmen.");
+      return;
+    }
+    try {
+      const raw = el.jsonBox.value.trim();
+      if (!raw) { setStatus("Kein JSON im Feld."); return; }
+      const parsed = JSON.parse(raw);
+      const nextState = parsed?.state || parsed;
+      if (!nextState || typeof nextState !== "object") {
+        setStatus("Import-JSON hat nicht das erwartete Format.");
+        return;
+      }
+      state = normalizeState(nextState);
+      saveState();
+      currentQueue = [];
+      viewQueue = [];
+      loopSelected = new Set();
+      loopContextKey = null;
+      stopPlaybackUI({ broadcast: true });
+      renderList();
+      renderLoopSection();
+      renderMgrIfOpen();
+      setStatus("Import übernommen und an Server gesendet.");
+    } catch {
+      setStatus("Import fehlgeschlagen: JSON ist nicht gültig.");
+    }
+  });
+
+  // -----------------------------
+  // Init
+  // -----------------------------
+applyRoleUi();
+ensurePlayerLoaded();
+
+const localUi = loadLocalUiState();
+el.mainVol.value = Math.max(0, Math.min(100, numberOrFallback(localUi.mainVolume, numberOrFallback(state.ui.mainVolume, 70))));
+el.fxVol.value = Math.max(0, Math.min(100, numberOrFallback(localUi.fxVolume, Number(el.fxVol.value || 35))));
+
+el.shuffleMode.checked = !!state.ui.shuffleEnabled;
+
+ensureSoundboardState(state);
+el.sbVol.value = Math.max(0, Math.min(100, numberOrFallback(localUi.soundboardVolume, numberOrFallback(state.soundboard.volume, 45))));
+sbApplyVolume();
+
+renderList();
+renderLoopSection();
+renderSoundboard();
+updateButtons();
+fxApplyVolume();
+
+  if (!socket) {
+    setStatus("Socket.IO ist nicht verfügbar. Starte die Seite über deinen Node-Server, nicht direkt als Datei.");
+  } else {
+    setStatus("Verbinde mit Server…");
+  }
+})();
+</script>
+</body>
+</html>

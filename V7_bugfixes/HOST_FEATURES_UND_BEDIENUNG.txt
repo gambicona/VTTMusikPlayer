@@ -1,0 +1,574 @@
+﻿Mini-Musikbibliothek Multiplayer - Host-Bedienung und Featureliste
+==================================================================
+
+Diese Anleitung beschreibt die App aus Sicht des Hosts: Was kann sie, wofür
+sind die einzelnen Player gedacht, und wie benutzt man die wichtigsten
+Funktionen im Spielbetrieb.
+
+
+1. Grundidee
+------------
+
+Die App ist eine geteilte Musik- und Soundbibliothek für Pen-and-Paper,
+Rollenspielrunden oder andere Sessions mit gemeinsamem Ambience-/Musikbedarf.
+
+Der Host verwaltet die Bibliothek, importiert Tracks, ordnet sie in Playlists
+und Ordner, setzt Tags, Schnitte und Soundboard-Effekte. Gäste können die
+Wiedergabe mitsteuern und hören dieselben Tracks, aber ihre Lautstärke bleibt
+lokal im eigenen Browser.
+
+Host-Seite:
+
+  http://localhost:3001/?host=1
+
+Gast-Seite:
+
+  http://HOST-IP:3001/
+
+
+1.1 Einfache Variante: Host steuert alles und teilt den Ton
+-----------------------------------------------------------
+
+Wenn die anderen Personen die Musik nicht selbst steuern müssen, kann der Host
+die Webseite auch allein benutzen und den Ton über Discord, OBS oder eine andere
+Audio-/Screen-Sharing-Lösung teilen.
+
+Vorgehen:
+
+1. Host-Seite öffnen:
+
+   http://localhost:3001/?host=1
+
+2. In Discord/OBS/Screen Share den Browser- oder Systemton teilen.
+3. Musik, FX und Soundboard nur als Host steuern.
+
+Vorteil:
+
+- Niemand sonst muss die Webseite öffnen.
+- Es gibt keine Netzwerk-/Firewall-Probleme für Gäste.
+- Alle hören denselben Mix, so wie der Host ihn ausgibt.
+
+Nachteil:
+
+- Gäste können die Sounds nicht selbst steuern.
+- Gäste haben keine eigene Lautstärke im Browser, sondern hören den geteilten
+  Stream.
+
+
+2. Die drei Wiedergabe-Bereiche
+-------------------------------
+
+Es gibt drei unterschiedliche Player mit unterschiedlichen Aufgaben.
+
+
+2.1 Main Player
+---------------
+
+Der Main Player ist für die normale Musik oder Ambience-Playlist gedacht.
+
+Typische Nutzung:
+
+- Hintergrundmusik für Szenen
+- Dungeon-Ambience
+- Kampfmusik
+- Reisen, Tavernen, Stadt, Wald, Horror, Spannung usw.
+
+Der Main Player spielt Tracks aus der aktuell angezeigten Playlist oder aus
+den Suchergebnissen ab. Wenn ein Track gestartet wird, wird die aktuelle
+Abspielliste als Wiedergabe-Queue benutzt.
+
+Wichtige Funktionen:
+
+- Play / Pause / Stop
+- Prev / Next
+- Lautstärke lokal pro Browser
+- Loop-Modi
+- Shuffle
+- Start/Ende schneiden
+- Tags setzen
+- Aktuellen Track umbenennen
+- Track überall löschen
+
+
+2.2 FX Player
+-------------
+
+Der FX Player ist für durchgehende Hintergrundgeräusche gedacht.
+
+Beispiele:
+
+- Regen
+- Wind
+- Feuer
+- Marktgeräusche
+- Tavernengeräusche
+- Höhle
+- Meer
+- Maschinenraum
+
+Der FX Player loopt immer genau den ausgewählten FX-Track. Er ist also ideal,
+wenn unter der normalen Musik dauerhaft ein Geräusch laufen soll.
+
+Wichtige Eigenschaften:
+
+- Eigene Playlist-/Track-Auswahl
+- Eigene Lautstärke
+- FX Start / FX Stop
+- Loop: immer dieser Track
+- Kann YouTube-Tracks und lokale MP3/MP4/WAV-Tracks abspielen
+- Wird zwischen Host und Gästen synchron gestartet/gestoppt
+
+Praktisches Beispiel:
+
+Main Player:
+
+  Traurige Stadtmusik
+
+FX Player:
+
+  Leichter Regen
+
+So kann die Szene musikalisch laufen, während das Wetter durchgehend im
+Hintergrund bleibt.
+
+
+2.3 Soundboard
+--------------
+
+Das Soundboard ist für einmalige Soundeffekte gedacht.
+
+Beispiele:
+
+- Tür knarrt
+- Schwertschlag
+- Explosion
+- Monster-Schrei
+- Zauber
+- Glocke
+- kurzer Jingle
+
+Ein Soundboard-Sound ist nicht als Dauerschleife gedacht, sondern als kurzer
+Effekt, der einmal abgespielt wird.
+
+Wichtige Eigenschaften:
+
+- Kategorien für Sounds
+- Buttons für einzelne Sounds
+- End Sound zum Stoppen
+- Eigene Lautstärke
+- Sounds können YouTube-Links sein
+- Sounds können auch vorhandene Tracks aus Ordner -> Playlist -> Track sein
+- Dadurch funktionieren auch lokale MP3/MP4/WAV-Dateien im Soundboard
+
+
+3. Import: YouTube
+------------------
+
+Im Bereich "YT Import" gibt es drei Buttons:
+
+
+3.1 Video
+---------
+
+Importiert einen einzelnen YouTube-Link.
+
+Vorgehen:
+
+1. YouTube-Link in die URL-Leiste einfügen.
+2. Auf "Video" klicken.
+
+Der Track wird zur aktuell ausgewählten Playlist hinzugefügt.
+
+Wenn "Alle Titel" aktiv ist, landet der Track in "Unsortiert".
+
+
+3.2 Playlist
+------------
+
+Importiert eine komplette YouTube-Playlist.
+
+Vorgehen:
+
+1. YouTube-Playlist-Link einfügen.
+2. Auf "Playlist" klicken.
+
+Die App erstellt eine neue Playlist und importiert die enthaltenen Videos.
+
+Hinweise:
+
+- Private oder nicht einbettbare Playlists können Probleme machen.
+- YouTube kann manchmal verhindern, dass alle Daten ausgelesen werden.
+- Die importierten Titel werden danach normal in der Bibliothek verwaltet.
+
+
+3.3 Kapitel
+-----------
+
+Erstellt aus einem YouTube-Video mit Kapiteln/Timestamps eine Playlist.
+
+Vorgehen:
+
+1. YouTube-Video mit Kapiteln/Timestamps einfügen.
+2. Auf "Kapitel" klicken.
+
+Die App erstellt pro Kapitel einen eigenen Track-Schnitt.
+
+Gut geeignet für:
+
+- lange Ambience-Videos mit Kapiteln
+- Musik-Mixes mit Trackliste
+- Soundscape-Videos mit verschiedenen Abschnitten
+
+
+4. Import: Lokal
+----------------
+
+Im Bereich "Lokal Import" gibt es zwei Buttons:
+
+
+4.1 Datei
+---------
+
+Importiert eine einzelne lokale Datei.
+
+Unterstützte Formate:
+
+- MP3
+- MP4
+- WAV
+
+Vorgehen:
+
+1. Auf "Datei" klicken.
+2. Datei auswählen.
+
+Die Datei wird in den Medienordner kopiert und der aktuell ausgewählten
+Playlist hinzugefügt.
+
+
+4.2 Ordner
+----------
+
+Importiert alle unterstützten Dateien aus einem lokalen Ordner.
+
+Vorgehen:
+
+1. Auf "Ordner" klicken.
+2. Ordner auswählen.
+
+Die App erstellt eine neue Playlist nach dem Ordnernamen und importiert alle
+MP3/MP4/WAV-Dateien in dieser Reihenfolge.
+
+
+4.3 Dateien manuell in data/media kopieren
+------------------------------------------
+
+Es ist auch möglich, Dateien manuell in den Medienordner zu kopieren:
+
+  data/media/
+
+Empfohlene Struktur:
+
+  data/media/
+    Meine Playlist/
+      track 01.mp3
+      track 02.mp3
+
+Wenn du danach denselben Ordner über "Lokal Import -> Ordner" importierst,
+erkennt der Server vorhandene Dateien mit gleichem Namen und gleicher Größe.
+Sie werden dann nicht noch einmal kopiert, sondern korrekt in die Bibliothek
+eingetragen.
+
+Wichtig:
+
+- Bereits vorhandene Dateien werden nicht verschoben.
+- Bereits vorhandene Dateien werden nicht umbenannt.
+- Wenn ein Dateiname existiert, aber die Datei eine andere Größe hat, wird
+  eine neue Datei mit Zusatz wie "(2)" angelegt.
+
+
+5. Playlists und Ordner
+-----------------------
+
+Die Bibliothek kann in Playlists und Ordner organisiert werden.
+
+Playlists:
+
+- enthalten Tracks
+- können umbenannt werden
+- können gelöscht werden
+- können einem oder mehreren Ordnern zugeordnet werden
+
+Ordner:
+
+- dienen zur Organisation von Playlists
+- helfen besonders bei großen Bibliotheken
+
+Beispiele für Ordner:
+
+- Orte
+- Kämpfe
+- Wetter
+- Horror
+- Tavernen
+- Charakter-Themes
+- Soundeffekte
+
+
+6. Suche
+--------
+
+Die Suche "Aktuelle Liste durchsuchen" sucht zuerst in der aktiven Playlist.
+
+Wenn dort nichts gefunden wird, sucht die App automatisch in allen Tracks und
+zeigt diese Treffer an.
+
+Gesucht wird nach:
+
+- Titel
+- Tags
+
+Das ist praktisch, wenn man nicht mehr weiss, in welcher Playlist ein Track
+liegt.
+
+
+7. Tags
+-------
+
+Tracks können Tags bekommen.
+
+Beispiele:
+
+- regen
+- kampf
+- ruhig
+- stadt
+- boss
+- wald
+- horror
+- magie
+
+Tags helfen beim Suchen und Sortieren der Bibliothek.
+
+
+7.1 Tags für aktuellen Track setzen
+------------------------------------
+
+Vorgehen:
+
+1. Track starten.
+2. Auf "Tags setzen" klicken.
+3. Tags kommasepariert eingeben.
+
+Beispiel:
+
+  regen, ruhig, nacht
+
+
+7.2 Playlist-Tags setzen
+------------------------
+
+In der Loop-/Playlist-Seite gibt es die Möglichkeit, Tags auf mehrere Tracks
+der aktuellen Wiedergabe-Queue anzuwenden.
+
+Das ist praktisch, wenn eine ganze Playlist z.B. "stadt" oder "kampf" bekommen
+soll.
+
+
+8. Start und Ende schneiden
+---------------------------
+
+Ein Track kann einen eigenen Start- oder Endpunkt bekommen.
+
+Buttons:
+
+- Anfang festlegen
+- Ende festlegen
+
+Vorgehen:
+
+1. Track aus einer Playlist starten.
+2. An die gewünschte Stelle springen.
+3. "Anfang festlegen" oder "Ende festlegen" klicken.
+4. Zeit bestätigen oder manuell eingeben.
+
+Zeitformate:
+
+  0:30
+  11:25
+  1:02:30
+
+Wichtig:
+
+- Schnitte sind playlist-spezifisch.
+- Wenn ein normaler Track geschnitten wird, erzeugt die App eine eigene
+  Schnitt-Version für diese Playlist.
+- Das Original bleibt erhalten.
+
+Das ist nützlich, wenn ein YouTube-Video am Anfang Werbung/Intro hat oder ein
+lokaler Track nur ab einem bestimmten Punkt gut passt.
+
+
+9. Loop und Shuffle
+-------------------
+
+Der Main Player hat mehrere Loop-Optionen.
+
+
+9.1 Loop: Aus
+-------------
+
+Die Queue spielt bis zum Ende und stoppt dann.
+
+
+9.2 Loop: Dieser Track
+----------------------
+
+Der aktuelle Track wird dauerhaft wiederholt.
+
+Gut für:
+
+- ein einzelnes Musikstück
+- eine bestimmte Ambience
+- eine Szene, die lange auf einer Stimmung bleiben soll
+
+
+9.3 Loop: Aktuelle Playlist
+---------------------------
+
+Die gesamte aktuelle Queue/Playlist wird wiederholt.
+
+Gut für:
+
+- längere Szenen
+- Reisen
+- Dungeon-Exploration
+- Tavernenabend
+
+
+9.4 Loop: Auswahl
+-----------------
+
+Nur ausgewählte Tracks aus der aktuellen Queue werden geloopt.
+
+Vorgehen:
+
+1. Track aus einer Playlist starten.
+2. Loop-Modus "Auswahl" wählen.
+3. In der rechten Loop-Liste einzelne Tracks an- oder abwählen.
+
+Gut für:
+
+- aus einer großen Playlist nur 3 passende Tracks für eine Szene nehmen
+- spontane Mini-Playlist während der Session bauen
+
+
+9.5 Shuffle
+-----------
+
+Shuffle mischt die Reihenfolge innerhalb der erlaubten Tracks.
+
+Shuffle funktioniert zusammen mit:
+
+- aktueller Playlist
+- Loop-Auswahl
+
+
+10. Wiedergabe vorbereiten
+--------------------------
+
+Browser blockieren manchmal automatische Wiedergabe.
+
+Dafür gibt es den grünen Button:
+
+  Wiedergabe starten
+
+Jeder Teilnehmer kann nach dem Laden der Seite einmal darauf klicken. Der
+Button bereitet die YouTube-Wiedergabe vor und verschwindet danach bis zum
+nächsten Reload.
+
+
+11. Lautstärke
+---------------
+
+Die Lautstärke ist lokal pro Browser.
+
+Das bedeutet:
+
+- Host-Lautstärke bleibt beim Host.
+- Gast-Lautstärke bleibt beim Gast.
+- Host und Gast überschreiben sich nicht gegenseitig.
+
+Es gibt getrennte Regler für:
+
+- Main Player
+- FX Player
+- Soundboard
+
+
+12. Soundboard konfigurieren
+----------------------------
+
+Im Host-Modus:
+
+1. "Configure Soundboard" klicken.
+2. Kategorien erstellen.
+3. Sounds hinzufügen.
+
+Ein Sound kann sein:
+
+- YouTube-Link
+- Track aus einer Playlist
+
+Bei "Track aus Playlist" wählt man:
+
+1. Ordner
+2. Playlist
+3. Track
+
+So können auch lokale Dateien als Soundboard-Sounds verwendet werden.
+
+
+13. Backup und Weitergabe
+-------------------------
+
+Wichtige Dateien:
+
+  data/library.json
+  data/media/
+
+Für eine Weitergabe am besten den kompletten Projektordner kopieren.
+
+Vor größeren Änderungen:
+
+  data/
+
+als Backup kopieren.
+
+
+14. Praktischer Session-Workflow
+--------------------------------
+
+Vor der Session:
+
+1. Server starten.
+2. Host-Seite mit ?host=1 öffnen.
+3. Gäste verbinden lassen.
+4. Jeder klickt einmal "Wiedergabe starten".
+5. Lautstärken lokal einstellen.
+
+Während der Session:
+
+1. Main Player für Musik/Ambience nutzen.
+2. FX Player für dauerhafte Hintergrundgeräusche nutzen.
+3. Soundboard für einzelne Effekte nutzen.
+4. Suche/Tags verwenden, um schnell passende Tracks zu finden.
+5. Bei Bedarf spontan Loop-Auswahl bauen.
+
+Nach der Session:
+
+1. Server mit Ctrl+C stoppen.
+2. Bei Bedarf data/ sichern.
+
+
+

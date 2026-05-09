@@ -1,0 +1,278 @@
+﻿Mini-Musikbibliothek Multiplayer - Setup-Anleitung
+==================================================
+
+Diese Anleitung beschreibt, wie du die Musikbibliothek auf einem neuen Rechner
+einrichtest und wie Host und Gäste sie benutzen.
+
+
+1. Voraussetzungen
+------------------
+
+Installiere Node.js:
+
+  https://nodejs.org/
+
+Empfohlen ist die LTS-Version. Nach der Installation prüfen:
+
+  node -v
+  npm -v
+
+
+2. Projektordner vorbereiten
+----------------------------
+
+Kopiere den kompletten Projektordner auf den Zielrechner, zum Beispiel:
+
+  Musikbib/
+    server.js
+    public/
+    data/
+    node_modules/   (optional)
+
+Wenn der Ordner node_modules fehlt, installiere die benötigten Pakete im
+Projektordner:
+
+  npm install express socket.io
+
+Wenn node_modules bereits mitkopiert wurde, ist dieser Schritt normalerweise
+nicht nötig.
+
+
+3. Server starten
+-----------------
+
+Öffne ein Terminal / PowerShell im Projektordner und starte:
+
+  node server.js
+
+Wenn alles klappt, läuft die App auf Port 3001.
+
+Host-Adresse auf demselben Rechner:
+
+  http://localhost:3001/?host=1
+
+Gast-Adresse auf demselben Rechner:
+
+  http://localhost:3001/
+
+
+4. Zugriff für andere Personen
+-------------------------------
+
+Andere Personen müssen die IP-Adresse des Host-Rechners benutzen:
+
+  http://HOST-IP:3001/
+
+Beispiel:
+
+  http://192.168.178.25:3001/
+
+Falls ihr Hamachi/Radmin/VPN benutzt, nimmt der Gast die VPN-IP des Host-Rechners:
+
+  http://HAMACHI-IP:3001/
+
+Wichtig:
+
+- Der Host öffnet die Seite mit ?host=1.
+- Gäste öffnen dieselbe Adresse ohne ?host=1.
+- Falls Gäste die Seite nicht erreichen, prüfe Firewall/Windows Defender.
+  Node.js bzw. Port 3001 muss im Netzwerk erlaubt sein.
+
+
+4.1 Alternative: Nur Host + Ton über Discord/OBS teilen
+-------------------------------------------------------
+
+Wenn niemand außer dem Host die Sounds steuern muss, brauchst du keine Gäste
+mit der Webseite verbinden.
+
+Der Host kann die Seite einfach allein im Host-Modus öffnen:
+
+  http://localhost:3001/?host=1
+
+Dann teilt der Host den Browser- oder Systemton über ein anderes Programm,
+zum Beispiel:
+
+- Discord Bildschirmübertragung mit Ton
+- Discord Aktivität/Stream
+- OBS / virtuelles Audiokabel
+- andere Screen- oder Audio-Sharing-Software
+
+Das ist die einfachste Variante, wenn nur eine Person die Musik steuern soll.
+Die Gäste hören dann den geteilten Ton, benutzen aber nicht selbst die
+Webseite.
+
+
+5. Daten und Medien
+-------------------
+
+Die Bibliothek wird hier gespeichert:
+
+  data/library.json
+
+Lokale MP3/MP4/WAV-Dateien werden hier abgelegt:
+
+  data/media/
+
+Wenn du die Bibliothek an jemand anderen weitergibst, kopiere mindestens:
+
+  server.js
+  public/
+  data/library.json
+  data/media/
+
+Am einfachsten ist es, den kompletten Projektordner weiterzugeben.
+
+
+6. YouTube-Import
+-----------------
+
+Im Host-Modus gibt es den Bereich:
+
+  YT Import
+
+Funktionen:
+
+- Video: importiert einen einzelnen YouTube-Link.
+- Playlist: importiert eine ganze YouTube-Playlist.
+- Kapitel: erzeugt aus einem YouTube-Video mit Kapiteln/Timestamps eine Playlist.
+
+Gäste können YouTube-Links hinzufügen. Diese landen in OtherImports.
+
+
+7. Lokaler Import
+-----------------
+
+Im Host-Modus gibt es den Bereich:
+
+  Lokal Import
+
+Funktionen:
+
+- Datei: importiert eine einzelne MP3/MP4/WAV-Datei.
+- Ordner: importiert alle MP3/MP4/WAV-Dateien aus einem gewählten Ordner.
+
+Die Dateien werden in data/media kopiert. Neue Importe benutzen lesbare Ordner
+und Dateinamen, zum Beispiel:
+
+  data/media/Meine Playlist/song.mp3
+  data/media/Meine Playlist/song (2).mp3
+
+Wenn eine Datei dort schon mit gleichem Namen und gleicher Größe existiert,
+wird sie nicht erneut kopiert.
+
+Bereits vorhandene Dateien werden nicht automatisch verschoben oder umbenannt.
+
+
+8. Wiedergabe vorbereiten
+-------------------------
+
+Browser blockieren manchmal automatische Wiedergabe, besonders bei YouTube.
+
+Nach dem Laden der Seite kann jeder Teilnehmer einmal auf den grünen Button
+klicken:
+
+  Wiedergabe starten
+
+Der Button bereitet die YouTube-Wiedergabe vor und verschwindet danach bis zum
+nächsten Neuladen der Seite.
+
+
+9. Lautstärke
+--------------
+
+Die Lautstärke ist pro Browser lokal.
+
+Das bedeutet:
+
+- Der Host kann seine Lautstärke setzen.
+- Jeder Gast kann seine eigene Lautstärke setzen.
+- Die Lautstärke wird nicht zwischen Host und Gästen synchronisiert.
+
+
+10. Rollen
+----------
+
+Host:
+
+  http://localhost:3001/?host=1
+
+Der Host kann:
+
+- Playlists und Ordner verwalten
+- YouTube und lokale Dateien importieren
+- Tracks umbenennen, schneiden, taggen und löschen
+- Soundboard konfigurieren
+
+Gast:
+
+  http://HOST-IP:3001/
+
+Gäste können:
+
+- Wiedergabe steuern
+- eigene Lautstärke einstellen
+- YouTube-Links in OtherImports hinzufügen
+
+
+11. Soundboard
+--------------
+
+Im Host-Modus kann das Soundboard konfiguriert werden.
+
+Sounds können entweder sein:
+
+- ein YouTube-Link
+- ein vorhandener Track aus Ordner -> Playlist -> Track
+
+Dadurch können auch lokale MP3/MP4/WAV-Dateien im Soundboard verwendet werden.
+
+
+12. Backup
+----------
+
+Ein Backup besteht aus:
+
+  data/library.json
+  data/media/
+
+Optional kannst du den ganzen Projektordner zippen.
+
+Vor größeren Änderungen empfiehlt es sich, den data-Ordner zu kopieren.
+
+
+13. Typische Probleme
+---------------------
+
+Problem: Gast kann Seite nicht öffnen.
+
+- Prüfe, ob der Server läuft.
+- Prüfe, ob die Adresse Port 3001 benutzt.
+- Prüfe Firewall/Windows Defender.
+- Bei VPN/Hamachi: VPN-IP statt lokaler Heimnetz-IP benutzen.
+
+Problem: YouTube startet beim Gast nicht.
+
+- Gast klickt einmal auf "Wiedergabe starten".
+- Danach erneut Play/Start auslösen.
+
+Problem: Lokale Dateien spielen beim Gast nicht.
+
+- Prüfe, ob data/media mitkopiert wurde.
+- Prüfe, ob der Server neu gestartet wurde.
+- Die Datei muss über http://HOST-IP:3001/media/... erreichbar sein.
+
+Problem: Nach Code-Änderungen passiert nichts.
+
+- Browser neu laden.
+- Bei Änderungen an server.js: Node-Server stoppen und neu starten.
+
+
+14. Server stoppen
+------------------
+
+Im Terminal, in dem node server.js läuft:
+
+  Ctrl + C
+
+
+

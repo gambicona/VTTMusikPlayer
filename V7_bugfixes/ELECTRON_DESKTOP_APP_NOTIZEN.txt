@@ -1,0 +1,151 @@
+Electron-Desktop-App: Notizen fuer spaeter
+===========================================
+
+Ziel:
+
+Die aktuelle Musikbibliothek spaeter optional als Desktop-App verpacken, damit
+der Host sie per Doppelklick starten kann, ohne manuell `node server.js` im
+Terminal auszufuehren.
+
+
+Grundidee
+---------
+
+Electron kann die bestehende Web-App als Desktop-Fenster oeffnen.
+
+Intern wuerde die App weiterhin den lokalen Server starten und dann automatisch
+die Host-Seite laden:
+
+  http://localhost:3001/?host=1
+
+So bleiben die aktuellen Funktionen erhalten:
+
+- lokale Dateien aus data/media
+- data/library.json
+- YouTube-Importe
+- Soundboard
+- FX Player
+- optional auch Multiplayer/Guest-Zugriff, wenn gewuenscht
+
+
+Grobe Schritte
+--------------
+
+1. npm-Projekt vorbereiten
+
+   Falls noch keine package.json existiert:
+
+     npm init -y
+
+
+2. Abhaengigkeiten installieren
+
+   Runtime:
+
+     npm install --save express socket.io
+
+   Electron und Build-Tool:
+
+     npm install --save-dev electron electron-builder
+
+
+3. Electron-Startdatei anlegen
+
+   Beispiel:
+
+     electron-main.js
+
+   Diese Datei wuerde:
+
+   - den bestehenden Server intern starten
+   - ein Desktop-Fenster oeffnen
+   - darin http://localhost:3001/?host=1 laden
+   - beim Beenden der App sauber aufraeumen
+
+
+4. server.js leicht umbauen
+
+   Aktuell wird der Server direkt durch `node server.js` gestartet.
+
+   Fuer Electron waere besser:
+
+   - eine Funktion `startServer()` exportieren
+   - trotzdem `node server.js` weiterhin erlauben
+
+   Dadurch bleiben beide Varianten moeglich:
+
+   - normale Browser-/Multiplayer-Version per `node server.js`
+   - Desktop-Version per Electron
+
+
+5. package.json Scripts ergaenzen
+
+   Beispiel:
+
+     "scripts": {
+       "start": "electron .",
+       "build": "electron-builder"
+     }
+
+
+6. Build-Konfiguration ergaenzen
+
+   In package.json oder einer separaten Config festlegen:
+
+   - App-Name
+   - Windows-Ziel, z.B. portable EXE oder Installer
+   - einzupackende Dateien:
+     - public/
+     - data/
+     - server.js
+     - electron-main.js
+
+
+7. Lokal testen
+
+     npm run start
+
+   Erwartung:
+
+   - Desktop-Fenster oeffnet sich
+   - Host-Seite ist geladen
+   - Musikbibliothek funktioniert wie bisher
+
+
+8. App bauen
+
+     npm run build
+
+   Ergebnis waere je nach Konfiguration z.B.:
+
+   - portable .exe
+   - Windows Installer
+
+
+Wichtige Hinweise
+-----------------
+
+- Electron ist kostenlos und Open Source.
+- Die App wird deutlich groesser, weil Electron Chromium und Node mitbringt.
+- Fuer Host-only ist Electron sehr praktisch.
+- Fuer echten Multiplayer kann trotzdem eine Firewall-Freigabe noetig sein,
+  wenn Gaeste von anderen Rechnern zugreifen sollen.
+- Man sollte vorher die aktuelle Web-Version gut testen, bevor packaging
+  dazukommt.
+
+
+Empfohlene Strategie
+--------------------
+
+Erst die aktuelle App fertig testen und Bugs beheben.
+
+Danach optional Electron als zweite Startvariante hinzufuegen:
+
+1. Browser/Server-Modus bleibt erhalten:
+
+     node server.js
+
+2. Desktop-Host-Modus kommt dazu:
+
+     Doppelklick auf die App
+
